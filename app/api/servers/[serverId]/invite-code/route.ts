@@ -4,6 +4,13 @@ import { v4 as uuid } from "uuid";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 
+function secureRandomString(length = 9) {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, (n) => chars[n % chars.length]).join('');
+}
+
 export async function PATCH(
   _req: NextRequest,
   { params }: { params: { serverId: string } },
@@ -22,7 +29,7 @@ export async function PATCH(
         profileId: profile.id,
       },
       data: {
-        inviteCode: uuid(),
+        inviteCode: secureRandomString(),
       },
     });
 

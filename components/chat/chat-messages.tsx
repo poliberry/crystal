@@ -24,7 +24,7 @@ type ChatMessagesProps = {
   socketQuery: Record<string, string>;
   paramKey: "channelId" | "conversationId";
   paramValue: string;
-  type: "channel" | "conversation";
+  type: "channel" | "conversation" | "personal-space";
 };
 
 export const ChatMessages = ({
@@ -85,7 +85,7 @@ export const ChatMessages = ({
   }
 
   return (
-    <div ref={chatRef} className="flex-1 flex flex-col py-4 overflow-y-auto">
+    <div ref={chatRef} className="flex-1 flex flex-col py-4 max-h-[89vh] overflow-y-auto">
       {!hasNextPage && <div className="flex-1" aria-hidden />}
 
       {!hasNextPage && <ChatWelcome type={type} name={name} />}
@@ -115,7 +115,7 @@ export const ChatMessages = ({
                 member={message.member}
                 id={message.id}
                 content={message.content}
-                fileUrl={message.fileUrl}
+                attachments={message.attachments}
                 deleted={message.deleted}
                 timestamp={format(new Date(message.createdAt), DATE_FORMAT)}
                 isUpdated={message.updatedAt !== message.createdAt}

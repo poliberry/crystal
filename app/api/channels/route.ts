@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
         channels: {
           create: {
             profileId: profile.id,
+            position: 1,
+            categoryId: searchParams.get("categoryId") || undefined,
             name,
             type,
           },

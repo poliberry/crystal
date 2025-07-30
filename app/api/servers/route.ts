@@ -19,16 +19,36 @@ export async function POST(req: NextRequest) {
         name,
         imageUrl,
         inviteCode: uuid(),
-        channels: {
-          create: [{ name: "general", profileId: profile.id }],
-        },
         members: {
           create: [{ profileId: profile.id, role: MemberRole.ADMIN }],
         },
       },
     });
 
-    return NextResponse.json(server);
+    const completeServer = await db.server.update({
+      where: { id: server.id },
+      data: {
+        categories: {
+          create: {
+            name: "Text Channels",
+            channels: {
+              create: [
+                {
+                  name: "general",
+                  type: "TEXT",
+                  position: 1,
+                  profileId: profile.id,
+                  serverId: server.id,
+                },
+              ],
+              
+            },
+          },
+        },
+      }
+    });
+
+    return NextResponse.json(completeServer);
   } catch (error: unknown) {
     console.error("[SERVERS_POST]: ", error);
     return new NextResponse("Internal Server Error.", { status: 500 });

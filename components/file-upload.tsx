@@ -2,6 +2,7 @@
 
 import { FileIcon, X } from "lucide-react";
 import Image from "next/image";
+import { Form } from "react-hook-form";
 
 import { UploadDropzone } from "@/lib/uploadthing";
 

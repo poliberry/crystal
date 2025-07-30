@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, PlusCircle } from "lucide-react";
 
 import { ActionTooltip } from "../action-tooltip";
 import { useModal } from "@/hooks/use-modal-store";
@@ -10,15 +10,15 @@ export const NavigationAction = () => {
 
   return (
     <div>
-      <ActionTooltip side="right" align="center" label="Add a server">
+      <ActionTooltip side="bottom" align="center" label="Add a community">
         <button
           onClick={() => onOpen("createServer")}
           className="group flex items-center"
         >
-          <div className="flex mx-3 h-[48px] w-[48px] rounded-[24px] group-hover:rounded-[16px] transition-all overflow-hidden items-center justify-center bg-background dark:bg-neutral-700 group-hover:bg-emerald-500">
-            <Plus
-              className="group-hover:text-white transition text-emerald-500"
-              size={25}
+          <div className="flex mx-4 h-[35px] w-[35px] rounded-[12px] transition-all overflow-hidden items-center justify-center bg-transparent group-hover:bg-purple-500 group-hover:shadow-md">
+            <PlusCircle
+              className="group-hover:text-white transition text-white"
+              size={20}
             />
           </div>
         </button>

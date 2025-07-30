@@ -21,22 +21,13 @@ export const NavigationItem = ({ id, imageUrl, name }: NavigationItemProps) => {
   };
 
   return (
-    <ActionTooltip side="right" align="center" label={name}>
-      <button onClick={onClick} className="group relative flex items-center">
+    <ActionTooltip side="bottom" align="center" label={name}>
+      <button onClick={onClick} className="group flex flex-col items-center">
         <div
           className={cn(
-            "absolute left-0 bg-primary rounded-r-full transition-all w-[4px]",
-            params?.serverId !== id && "group-hover:h-[20px]",
-            params?.serverId === id ? "h-[36px]" : "h-[8px]",
-          )}
-          aria-hidden
-        />
-
-        <div
-          className={cn(
-            "relative group flex mx-3 h-[48px] w-[48px] rounded-[24px] group-hover:rounded-[16px] transition-all overflow-hidden",
+            "relative group mx-2 flex h-[35px] w-[35px] rounded-[16px] transition-all border-2 border-primary-foreground group-hover:border-primary group-hover:-translate-y-0.5 overflow-hidden",
             params?.serverId === id &&
-              "bg-primary/10 text-primary rounded-[16px]",
+              "border-primary bg-primary/10 dark:bg-primary/20",
           )}
         >
           <Image src={imageUrl} alt={name} fill />

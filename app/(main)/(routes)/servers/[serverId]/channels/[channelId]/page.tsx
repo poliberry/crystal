@@ -8,6 +8,11 @@ import { ChatMessages } from "@/components/chat/chat-messages";
 import { MediaRoom } from "@/components/media-room";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
+import { FloatingCallCard } from "@/components/call-ui";
+import { GlobalDropzone } from "@/components/chat/global-dropzone";
+import { Metadata } from "next";
+import { metadata } from "@/app/layout";
+import Head from "next/head";
 
 type ChannelIdPageProps = {
   params: {
@@ -16,10 +21,41 @@ type ChannelIdPageProps = {
   };
 };
 
+export async function generateMetadata({
+  params,
+}: ChannelIdPageProps): Promise<Metadata> {
+  const profile = await currentProfile();
+
+  if (!profile) return redirectToSignIn();
+
+  const server = await db.server.findUnique({
+    where: {
+      id: params.serverId,
+    },
+  });
+
+  const channel = await db.channel.findUnique({
+    where: {
+      id: params.channelId,
+    },
+  });
+
+  return {
+    title: `${channel?.type !== ChannelType.AUDIO ? "#" : ""}${channel?.name} | ${server?.name} | Crystal`,
+    description: `Chat in ${channel?.name} on ${server?.name}`,
+  };
+}
+
 const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
   const profile = await currentProfile();
 
   if (!profile) return redirectToSignIn();
+
+  const server = await db.server.findUnique({
+    where: {
+      id: params.serverId,
+    },
+  });
 
   const channel = await db.channel.findUnique({
     where: {
@@ -37,13 +73,14 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
   if (!channel || !member) redirect("/");
 
   return (
-    <div className="bg-white dark:bg-[#313338] flex flex-col h-full">
-      <ChatHeader
-        name={channel.name}
-        serverId={channel.serverId}
-        type="channel"
-      />
-
+    <div className="bg-transparent flex flex-col h-full">
+      {channel.type === ChannelType.TEXT && (
+        <ChatHeader
+          name={channel.name}
+          serverId={channel.serverId}
+          type="channel"
+        />
+      )}
       {channel.type === ChannelType.TEXT && (
         <>
           <ChatMessages
@@ -73,11 +110,9 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
       )}
 
       {channel.type === ChannelType.AUDIO && (
-        <MediaRoom chatId={channel.id} video={false} audio={true} />
-      )}
-
-      {channel.type === ChannelType.VIDEO && (
-        <MediaRoom chatId={channel.id} video={true} audio={true} />
+        <>
+          <MediaRoom channel={channel} server={server} />
+        </>
       )}
     </div>
   );

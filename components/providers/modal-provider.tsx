@@ -13,6 +13,9 @@ import { InviteModal } from "@/components/modals/invite-modal";
 import { LeaveServerModal } from "@/components/modals/leave-server-modal";
 import { MembersModal } from "@/components/modals/members-modal";
 import { MessageFileModal } from "@/components/modals/message-file-modal";
+import { CreateCategoryModal } from "../modals/create-category-modal";
+import { CssEditorModal } from "../modals/css-editor-modal";
+import { SwitchVoiceChannelModal } from "../modals/switch-voice-channel-modal";
 
 export const ModalProvider = () => {
   const [isMounted, setIsMounted] = useState(false);
@@ -34,6 +37,9 @@ export const ModalProvider = () => {
       <LeaveServerModal />
       <MembersModal />
       <MessageFileModal />
+      <CreateCategoryModal />
+      <CssEditorModal initialCss="" />
+      <SwitchVoiceChannelModal />
     </>
   );
 };

@@ -3,6 +3,8 @@ import { create } from "zustand";
 
 export type ModalType =
   | "createServer"
+  | "cssEditor"
+  | "createCategory"
   | "invite"
   | "editServer"
   | "members"
@@ -12,12 +14,14 @@ export type ModalType =
   | "deleteChannel"
   | "editChannel"
   | "messageFile"
+  | "switchVoiceChannel"
   | "deleteMessage";
 
 type ModalData = {
   server?: Server;
   channel?: Channel;
   channelType?: ChannelType;
+  categoryId?: string;
   apiUrl?: string;
   query?: Record<string, any>;
 };

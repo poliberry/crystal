@@ -13,7 +13,7 @@ export default async function handler(
 
   try {
     const profile = await currentProfilePages(req);
-    const { content, fileUrl } = req.body;
+    const { content, attachments } = req.body;
     const { serverId, channelId } = req.query;
 
     if (!profile) return res.status(401).json({ error: "Unauthorized." });
@@ -21,7 +21,6 @@ export default async function handler(
       return res.status(400).json({ error: "Server ID is missing." });
     if (!channelId)
       return res.status(400).json({ error: "Channel ID is missing." });
-    if (!content) return res.status(400).json({ error: "Content is missing." });
 
     const server = await db.server.findFirst({
       where: {
@@ -57,10 +56,16 @@ export default async function handler(
 
     const message = await db.message.create({
       data: {
-        content,
-        fileUrl,
+        content: content || "",
         channelId: channelId as string,
         memberId: member.id,
+        attachments: {
+          create: attachments?.map((attachment: { url: string; name: string, utId: string }) => ({
+            url: attachment.url,
+            name: attachment.name,
+            utId: attachment.utId, // Assuming utId is part of the attachment
+          })) || [],
+        }
       },
       include: {
         member: {
@@ -68,6 +73,7 @@ export default async function handler(
             profile: true,
           },
         },
+        attachments: true, // include attachments in the response
       },
     });
 

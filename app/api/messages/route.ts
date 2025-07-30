@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (!channelId)
       return new NextResponse("Channel ID is missing.", { status: 401 });
 
-    let messages: Message[] = [];
+    let messages = [];
 
     if (cursor) {
       messages = await db.message.findMany({
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
               profile: true,
             },
           },
+          attachments: true,
         },
         orderBy: {
           createdAt: "desc",
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest) {
               profile: true,
             },
           },
+          attachments: true,
         },
         orderBy: {
           createdAt: "desc",

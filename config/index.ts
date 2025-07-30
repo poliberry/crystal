@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const siteConfig: Metadata = {
-  title: "Discord Clone",
+  title: "Crystal",
   description:
-    "Real-time chat, voice, and community features in a modern, scalable Next.js 14-powered platform.",
+    "Real-time chat, audio and video calling, all whilst being completely private and customisable.",
   keywords: [
     "reactjs",
     "nextjs",
@@ -44,8 +44,8 @@ export const siteConfig: Metadata = {
     "css",
   ] as Array<string>,
   authors: {
-    name: "Sanidhya Kumar Verma",
-    url: "https://github.com/sanidhyy",
+    name: "ENDR",
+    url: "https://endr.tech",
   },
 } as const;
 

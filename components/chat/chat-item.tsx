@@ -1,13 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { MemberRole, type Member, type Profile } from "@prisma/client";
+import { Attachment, MemberRole, type Member, type Profile } from "@prisma/client";
 import axios from "axios";
 import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import qs from "query-string";
-import { type ElementRef, useEffect, useRef, useState } from "react";
+import { type ElementRef, useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 
 import { ActionTooltip } from "../action-tooltip";
 import { UserAvatar } from "../user-avatar";
+import { MediaEmbed, isSocialEmbed } from "./media-embed";
+import { utapi } from "@/app/api/uploadthing/route";
 
 type ChatItemProps = {
   id: string;
@@ -27,7 +29,7 @@ type ChatItemProps = {
     profile: Profile;
   };
   timestamp: string;
-  fileUrl: string | null;
+  attachments: Attachment[] | null; // <-- now an array
   deleted: boolean;
   currentMember: Member;
   isUpdated: boolean;
@@ -45,12 +47,21 @@ const formSchema = z.object({
   content: z.string().min(1),
 });
 
+function isValidUrl(str: string) {
+  try {
+    new URL(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const ChatItem = ({
   id,
   content,
   member,
   timestamp,
-  fileUrl,
+  attachments,
   deleted,
   currentMember,
   isUpdated,
@@ -81,7 +92,6 @@ export const ChatItem = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.keyCode === 27) {
-        console.log("Escape");
         setIsEditing(false);
       }
     };
@@ -91,17 +101,13 @@ export const ChatItem = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const fileType = fileUrl?.split(".").pop();
-
   const isAdmin = currentMember.role === MemberRole.ADMIN;
   const isModerator = currentMember.role === MemberRole.MODERATOR;
   const isOwner = currentMember.id === member.id;
 
   const canDeleteMessage = !deleted && (isAdmin || isModerator || isOwner);
-  const canEditMessage = !deleted && isOwner && !fileUrl;
-
-  const isPDF = fileUrl && fileType === "pdf";
-  const isImage = fileUrl && !isPDF;
+  // Allow editing if owner and not deleted (even if there are attachments)
+  const canEditMessage = !deleted && isOwner;
 
   const isLoading = form.formState.isSubmitting;
 
@@ -157,45 +163,12 @@ export const ChatItem = ({
             </span>
           </div>
 
-          {isImage && (
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
-            >
-              <Image
-                src={fileUrl}
-                alt={content}
-                fill
-                className="object-cover"
-              />
-            </a>
-          )}
+          {/* Content and editing logic */}
+          {isSocialEmbed(content) && <MediaEmbed url={content} />}
 
-          {isPDF && (
-            <div className="relative flex items-center p-2 mt-2 rounded-md bg-zinc-100 dark:bg-zinc-900">
-              <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400" />
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="ml-2 text-sm text-indigo-500 dark:text-indigo-400 hover:underline"
-              >
-                PDF File
-              </a>
-            </div>
-          )}
-
-          {!fileUrl && !isEditing && (
-            <p
-              className={cn(
-                "text-sm text-zinc-600 dark:text-zinc-300",
-                deleted &&
-                  "italic text-zinc-500 dark:text-zinc-400 text-sm mt-1",
-              )}
-            >
-              {content}{" "}
+          {!isEditing && !isSocialEmbed(content) && !isValidUrl(content) && content && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              {content}
               {isUpdated && !deleted && (
                 <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
                   (edited)
@@ -204,7 +177,7 @@ export const ChatItem = ({
             </p>
           )}
 
-          {!fileUrl && isEditing && (
+          {isEditing && (
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
@@ -229,7 +202,6 @@ export const ChatItem = ({
                     </FormItem>
                   )}
                 />
-
                 <Button
                   disabled={isLoading}
                   aria-disabled={isLoading}
@@ -239,11 +211,54 @@ export const ChatItem = ({
                   Save
                 </Button>
               </form>
-
               <span className="text-[10px] mt-1 text-zinc-400">
                 Press escape to cancel, enter to save
               </span>
             </Form>
+          )}
+
+          {/* Attachments grid - always rendered below content */}
+          {attachments && attachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {attachments.map((att) => {
+                const fileType = att.url.split(".").pop();
+                const isPdf = fileType === "pdf";
+                return (
+                  <div
+                    key={att.id || att.url}
+                    className="relative flex flex-col items-start"
+                  >
+                    {isPdf ? (
+                      <div className="flex items-center">
+                        <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400 mb-1" />
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="ml-2 text-sm text-indigo-500 dark:text-indigo-400 hover:underline"
+                        >
+                          {att.name || "PDF File"}
+                        </a>
+                      </div>
+                    ) : (
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
+                      >
+                        <Image
+                          src={att.url}
+                          alt={att.name || content}
+                          fill
+                          className="object-cover"
+                        />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -258,7 +273,6 @@ export const ChatItem = ({
               />
             </ActionTooltip>
           )}
-
           <ActionTooltip label="Delete">
             <Trash
               onClick={() =>

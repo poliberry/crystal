@@ -12,7 +12,7 @@ export const UserButton = () => {
       appearance={{
         baseTheme: theme === "dark" ? dark : undefined,
         elements: {
-          avatarBox: "h-[48px] w-[48px]",
+          avatarBox: "h-[35px] w-[35px]",
         },
       }}
       userProfileMode="navigation"

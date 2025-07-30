@@ -10,8 +10,9 @@ import type { ServerWithMembersWithProfiles } from "@/types";
 type ServerSectionProps = {
   label: string;
   role?: MemberRole;
-  sectionType: "channels" | "members";
+  sectionType: "channels" | "members" | "category";
   channelType?: ChannelType;
+  categoryId?: string;
   server?: ServerWithMembersWithProfiles;
 };
 
@@ -20,6 +21,7 @@ export const ServerSection = ({
   role,
   sectionType,
   channelType,
+  categoryId,
   server,
 }: ServerSectionProps) => {
   const { onOpen } = useModal();
@@ -29,10 +31,10 @@ export const ServerSection = ({
         {label}
       </p>
 
-      {role !== MemberRole.GUEST && sectionType === "channels" && (
+      {role !== MemberRole.GUEST && sectionType === "category" && (
         <ActionTooltip label="Create Channel" side="top">
           <button
-            onClick={() => onOpen("createChannel", { channelType })}
+            onClick={() => onOpen("createChannel", { channelType, categoryId })}
             className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-300 transition"
           >
             <Plus className="h-4 w-4" />

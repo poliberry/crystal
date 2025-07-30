@@ -76,6 +76,7 @@ export const CreateChannelModal = () => {
         url: "/api/channels",
         query: {
           serverId: params?.serverId,
+          categoryId: data.categoryId,
         },
       });
 

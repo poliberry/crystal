@@ -74,11 +74,11 @@ export const CreateServerModal = () => {
       <DialogContent className="p-0 overflow-hidden">
         <DialogHeader className="pt-8 px-6">
           <DialogTitle className="text-2xl text-center font-bold">
-            Create your server
+            Create your community
           </DialogTitle>
 
           <DialogDescription className="text-center text-zinc-500">
-            Give your server a personality with a name and an image. You can
+            Give your community a personality with a name and an image. You can
             always change it later.
           </DialogDescription>
         </DialogHeader>

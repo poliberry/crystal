@@ -39,9 +39,6 @@ export async function DELETE(
         channels: {
           delete: {
             id: params.channelId,
-            name: {
-              not: "general",
-            },
           },
         },
       },
@@ -63,7 +60,7 @@ export async function PATCH(
 
     if (!profile) return new NextResponse("Unauthorized.", { status: 401 });
 
-    const { name, type } = await req.json();
+    const { name, type, position, categoryId } = await req.json();
     const { searchParams } = new URL(req.url);
 
     const serverId = searchParams.get("serverId");
@@ -73,9 +70,6 @@ export async function PATCH(
 
     if (!params?.channelId)
       return new NextResponse("Channel ID is missing.", { status: 400 });
-
-    if (name === "general")
-      return new NextResponse('Name cannot be "general"', { status: 400 });
 
     const server = await db.server.update({
       where: {
@@ -94,13 +88,12 @@ export async function PATCH(
           update: {
             where: {
               id: params.channelId,
-              NOT: {
-                name: "general",
-              },
             },
             data: {
               name,
+              position,
               type,
+              categoryId,
             },
           },
         },

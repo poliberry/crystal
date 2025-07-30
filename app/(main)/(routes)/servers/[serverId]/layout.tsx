@@ -1,10 +1,11 @@
-import { redirectToSignIn } from "@clerk/nextjs";
+import { currentUser, redirectToSignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import type { PropsWithChildren } from "react";
 
 import { ServerSidebar } from "@/components/server/server-sidebar";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
+import { MemberSidebar } from "@/components/server/member-sidebar";
 
 const ServerIdLayout = async ({
   children,
@@ -15,8 +16,20 @@ const ServerIdLayout = async ({
   };
 }>) => {
   const profile = await currentProfile();
+  const user = await currentUser();
 
   if (!profile) return redirectToSignIn();
+
+  await db.profile.update({
+    where: {
+      userId: profile.userId,
+    },
+    data: {
+      name: `${user?.username}`,
+      imageUrl: `${user?.imageUrl}`,
+      email: `${user?.emailAddresses[0].emailAddress}`
+    }
+  })
 
   const server = await db.server.findUnique({
     where: {
@@ -32,11 +45,14 @@ const ServerIdLayout = async ({
   if (!server) redirect("/");
 
   return (
-    <div className="h-full">
-      <aside className="hidden md:flex h-full w-60 -20 flex-col fixed inset-y-0">
+    <div className="h-full flex pt-12 flex-row overflow-hidden pointer-events-auto">
+      <aside className="md:flex h-full w-96 flex-col inset-y-0 z-[10]">
         <ServerSidebar serverId={params.serverId} />
       </aside>
-      <main className="h-full md:pl-60">{children}</main>
+      <main className="h-full w-full z-[20]">{children}</main>
+      <aside className="md:flex h-full w-72 flex-col right-0 z-[10] inset-y-0">
+        <MemberSidebar serverId={params.serverId} />
+      </aside>
     </div>
   );
 };
