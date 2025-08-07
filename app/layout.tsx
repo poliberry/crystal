@@ -1,10 +1,10 @@
-import { ClerkProvider } from "@clerk/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Open_Sans, Overpass } from "next/font/google";
 import { extractRouterConfig } from "uploadthing/server";
 
 import { appFileRouter } from "@/app/api/uploadthing/core";
+import { ClerkClientProvider } from "@/components/providers/clerk-provider";
 import { ModalProvider } from "@/components/providers/modal-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { SocketProvider } from "@/components/providers/socket-provider";
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkClientProvider>
       <html lang="en" suppressHydrationWarning>
         <body
           className={cn(
@@ -65,6 +65,6 @@ export default function RootLayout({
           </ThemeProvider>
         </body>
       </html>
-    </ClerkProvider>
+    </ClerkClientProvider>
   );
 }

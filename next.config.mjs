@@ -16,6 +16,8 @@ const nextConfig = {
   },
   experimental: {
     serverComponentsExternalPackages: ["@clerk/nextjs"],
+    // Enable both App Router and Pages Router
+    appDir: true,
   },
   // Completely disable static optimization
   distDir: '.next',
