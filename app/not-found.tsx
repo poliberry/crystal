@@ -2,6 +2,9 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
 const NotFound = () => {
   return (
     <div className="h-full flex flex-col items-center justify-center space-y-4">

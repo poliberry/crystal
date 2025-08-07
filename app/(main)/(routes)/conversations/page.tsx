@@ -1,6 +1,9 @@
 
 import { PageContextProvider } from "@/components/providers/page-context-provider";
 
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
 export default function ConversationsHome() {
   return (
     <PageContextProvider

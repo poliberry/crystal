@@ -11,6 +11,9 @@ import { MediaRoom } from "@/components/media-room";
 import { PageContextProvider } from "@/components/providers/page-context-provider";
 import { NewMessagesBanner } from "@/components/new-messages-banner";
 
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
 const PersonalSpacePage = async () => {
   const profile = await currentProfile();
 

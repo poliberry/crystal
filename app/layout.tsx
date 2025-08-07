@@ -18,6 +18,10 @@ import "./globals.css";
 import { CustomCssInjector } from "@/components/custom-css-injector";
 import { ProgressProvider } from "@/components/progress-bar";
 
+// Force dynamic rendering for all pages
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const viewport: Viewport = {
   themeColor: "#5865F2",
 };

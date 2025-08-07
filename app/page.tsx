@@ -1,32 +1,34 @@
-import { redirect } from "next/navigation";
-import { initialProfile } from "@/lib/initial-profile";
-import { db } from "@/lib/db";
+"use client";
 
-// Force dynamic rendering for this page
-export const dynamic = 'force-dynamic';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 
-const HomePage = async () => {
-  try {
-    const profile = await initialProfile();
-    
-    const server = await db.server.findFirst({
-      where: {
-        members: {
-          some: {
-            profileId: profile.id,
-          },
-        },
-      },
-    });
+const HomePage = () => {
+  const router = useRouter();
+  const { isLoaded, isSignedIn } = useUser();
 
-    if (server) {
-      redirect(`/servers/${server.id}`);
-    } else {
-      redirect("/setup");
+  useEffect(() => {
+    if (!isLoaded) return; // Wait for Clerk to load
+
+    if (!isSignedIn) {
+      router.push("/sign-in");
+      return;
     }
-  } catch (error) {
-    redirect("/sign-in");
-  }
+
+    // If signed in, redirect to setup which will handle server logic
+    router.push("/setup");
+  }, [isLoaded, isSignedIn, router]);
+
+  // Show loading state while checking authentication
+  return (
+    <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">Loading...</p>
+      </div>
+    </div>
+  );
 };
 
 export default HomePage;
