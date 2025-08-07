@@ -13,6 +13,10 @@ type ChatHeaderProps = {
   name: string;
   type: "channel" | "conversation" | "personal-space";
   imageUrl?: string;
+  caller?: any;
+  user?: any;
+  conversation?: any;
+  currentProfile?: any;
 };
 
 export const ChatHeader = ({
@@ -20,6 +24,10 @@ export const ChatHeader = ({
   name,
   type,
   imageUrl,
+  caller,
+  user,
+  conversation,
+  currentProfile,
 }: ChatHeaderProps) => {
   return (
     <div className="text-md font-semibold px-3 flex z-[5] items-center h-12 border-b border-muted">
@@ -43,7 +51,7 @@ export const ChatHeader = ({
       <p className="text-xl text-black dark:text-white headerFont uppercase mt-0.5">{name} {type === "personal-space" && "(You)"}</p>
 
       <div className="ml-auto flex items-center">
-        {type === "conversation" && <ChatVideoButton />}
+        {type === "conversation" && <ChatVideoButton user={user} caller={caller} conversationName={name} conversation={conversation} currentProfile={currentProfile} />}
         <SocketIndicator />
       </div>
     </div>

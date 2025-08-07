@@ -10,6 +10,12 @@ export async function GET(req: NextRequest) {
             return new Response("Room name is missing.", { status: 400 });
         }
 
+        // Check if LiveKit is properly configured
+        if (!process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET || !process.env.NEXT_PUBLIC_LIVEKIT_URL) {
+            console.error("[ROOMS_GET]: LiveKit environment variables not configured");
+            return new Response("LiveKit not configured.", { status: 500 });
+        }
+
         // Assuming roomService is already imported and initialized
         const room = await roomService.listParticipants(roomName);
 

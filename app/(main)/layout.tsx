@@ -6,8 +6,6 @@ import { currentProfile } from "@/lib/current-profile";
 import { LiveKitProvider } from "@/components/providers/media-room-provider";
 import { ModalProvider } from "@/components/providers/modal-provider";
 
-const SIDEBAR_WIDTH = 72; // px
-
 const MainLayout = async ({ children }: PropsWithChildren) => {
   const profile = await currentProfile();
 
@@ -15,14 +13,14 @@ const MainLayout = async ({ children }: PropsWithChildren) => {
     <LiveKitProvider>
       <ModalProvider />
       <div className="h-screen w-full flex flex-col bg-white dark:bg-black relative">
-        {/* Sidebar */}
-        <aside
-          className={`absolute top-0 left-0 h-full w-full mb-[${SIDEBAR_WIDTH}px]`}
-        >
+        {/* Navigation */}
+        <div className="w-full">
           <NavigationSidebar />
-        </aside>
-        {/* Main content with left padding */}
-        <main className={`h-full w-full`}>{children}</main>
+        </div>
+        {/* Main content */}
+        <main className="flex-1 w-full overflow-hidden">
+          {children}
+        </main>
       </div>
     </LiveKitProvider>
   );
