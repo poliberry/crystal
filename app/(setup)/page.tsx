@@ -5,8 +5,6 @@ import { db } from "@/lib/db";
 import { initialProfile } from "@/lib/initial-profile";
 
 // Force dynamic rendering for this page
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 const SetupPage = async () => {
   try {

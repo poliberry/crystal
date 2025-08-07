@@ -17,7 +17,7 @@ const HomePage = () => {
     }
 
     // If signed in, redirect to setup which will handle server logic
-    router.push("/setup");
+    router.push("/conversations");
   }, [isLoaded, isSignedIn, router]);
 
   // Show loading state while checking authentication
