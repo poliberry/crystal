@@ -6,23 +6,30 @@ import { initialProfile } from "@/lib/initial-profile";
 
 // Force dynamic rendering for this page
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const SetupPage = async () => {
-  const profile = await initialProfile();
+  try {
+    const profile = await initialProfile();
 
-  const server = await db.server.findFirst({
-    where: {
-      members: {
-        some: {
-          profileId: profile.id,
+    const server = await db.server.findFirst({
+      where: {
+        members: {
+          some: {
+            profileId: profile.id,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (server) redirect(`/servers/${server.id}`);
+    if (server) redirect(`/servers/${server.id}`);
 
-  return <InitialModal />;
+    return <InitialModal />;
+  } catch (error) {
+    console.error("Setup page error:", error);
+    // Redirect to sign-in if there's an authentication error
+    redirect("/sign-in");
+  }
 };
 
 export default SetupPage;

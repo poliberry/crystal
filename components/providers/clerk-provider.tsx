@@ -8,5 +8,14 @@ interface ClerkClientProviderProps {
 }
 
 export const ClerkClientProvider = ({ children }: ClerkClientProviderProps) => {
-  return <ClerkProvider>{children}</ClerkProvider>;
+  return (
+    <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      appearance={{
+        baseTheme: undefined,
+      }}
+    >
+      {children}
+    </ClerkProvider>
+  );
 };

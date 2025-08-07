@@ -14,10 +14,22 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    serverComponentsExternalPackages: ["@clerk/nextjs"],
-    // Enable both App Router and Pages Router
-    appDir: true,
+  // Better configuration for production stability
+  swcMinify: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production",
+  },
+  // Add webpack configuration to handle module resolution issues
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
   },
   // Completely disable static optimization
   distDir: '.next',
