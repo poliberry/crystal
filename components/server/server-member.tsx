@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { UserAvatar } from "../user-avatar";
 import { useEffect, useState } from "react";
 import { useSocket } from "../providers/socket-provider";
-import { UserDialog } from "../user-dialog";
 
 type ServerMemberProps = {
   member: Member & { profile: Profile };
@@ -43,12 +42,11 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
   const params = useParams();
   const router = useRouter();
   const [status, setStatus] = useState<"ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE">(member.profile.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
-  const [presenceStatus, setPresenceStatus] = useState<string | null>(member.profile.presenceStatus);
   const icon = roleIconMap[member.role];
 
   // Listen for socket status updates
   useEffect(() => {
-    const statusHandler = (payload: { userId: string; status: string }) => {
+    const handler = (payload: { userId: string; status: string }) => {
       if (payload.userId === member.profile.userId) {
         const allowedStatuses = ["ONLINE", "IDLE", "DND", "INVISIBLE", "OFFLINE"];
         if (allowedStatuses.includes(payload.status)) {
@@ -56,25 +54,13 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
         }
       }
     };
-
-    const presenceHandler = (payload: { userId: string; presenceStatus: string | null }) => {
-      if (payload.userId === member.profile.userId) {
-        setPresenceStatus(payload.presenceStatus);
-      }
-    };
-
     // @ts-ignore
-    socket.on("user:status:update", statusHandler);
-    // @ts-ignore
-    socket.on("user:presence:update", presenceHandler);
-    
+    socket.on("user:status:update", handler);
     return () => {
       // @ts-ignore
-      socket.off("user:status:update", statusHandler);
-      // @ts-ignore
-      socket.off("user:presence:update", presenceHandler);
+      socket.off("user:status:update", handler);
     };
-  }, [member.profile.userId, socket]);
+  }, [member.profile.userId]);
 
   // Status indicator mapping
   const statusMap: Record<string, { color: string; text: string }> = {
@@ -87,8 +73,8 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
   const isOffline = status === "OFFLINE" || !status;
 
   return (
-    <UserDialog profileId={member.profile.id} serverId={server.id}>
-      <button
+    <button
+      onClick={onClick}
       className={cn(
         "group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition mb-1",
         params?.memberId === member.id && "bg-zinc-700/20 dark:bg-zinc-700",
@@ -97,7 +83,7 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
       <div className="relative">
         <UserAvatar
           src={member.profile.imageUrl}
-          alt={member.profile.globalName || member.profile.name}
+          alt={member.profile.name}
           className={cn(
             "h-8 w-8 md:h-8 md:w-8 transition",
             isOffline && "opacity-40"
@@ -113,40 +99,21 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
           />
         )}
       </div>
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "font-semibold text-sm group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
-            isOffline
-              ? "text-zinc-400 opacity-70"
-              : "text-zinc-500 dark:text-zinc-400",
-            params?.memberId === member.id &&
-              (isOffline
-                ? ""
-                : "text-primary dark:text-zinc-200 dark:group-hover:text-white")
-          )}
-        >
-          {member.profile.globalName || member.profile.name}
-        </p>
-        {!isOffline && presenceStatus && (
-          <p
-            className={cn(
-              "text-xs truncate group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
-              isOffline
-                ? "text-zinc-500 opacity-70"
-                : "text-zinc-400 dark:text-zinc-500",
-              params?.memberId === member.id &&
-                (isOffline
-                  ? ""
-                  : "text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300")
-            )}
-          >
-            {presenceStatus}
-          </p>
+      <p
+        className={cn(
+          "font-semibold text-sm group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition",
+          isOffline
+            ? "text-zinc-400 opacity-70"
+            : "text-zinc-500 dark:text-zinc-400",
+          params?.memberId === member.id &&
+            (isOffline
+              ? ""
+              : "text-primary dark:text-zinc-200 dark:group-hover:text-white")
         )}
-      </div>
+      >
+        {member.profile.name}
+      </p>
       {icon}
     </button>
-    </UserDialog>
   );
 };

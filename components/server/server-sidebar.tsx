@@ -141,6 +141,11 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
           </div>
         </div>
       </ScrollArea>
+      <div className="absolute bottom-0 left-0 right-0 w-[280px] px-2 pb-2 bg-white dark:bg-black">
+          <SignedIn>
+            <UserCard profile={profile} />
+          </SignedIn>
+        </div>
     </div>
   );
 };

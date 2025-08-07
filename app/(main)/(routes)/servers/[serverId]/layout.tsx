@@ -6,7 +6,6 @@ import { ServerSidebar } from "@/components/server/server-sidebar";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 import { MemberSidebar } from "@/components/server/member-sidebar";
-import { MemberSidebarWrapper } from "@/components/server/member-sidebar-wrapper";
 
 const ServerIdLayout = async ({
   children,
@@ -46,13 +45,13 @@ const ServerIdLayout = async ({
   if (!server) redirect("/");
 
   return (
-    <div className="h-full flex flex-row overflow-hidden pointer-events-auto">
+    <div className="h-full flex pt-12 flex-row overflow-hidden pointer-events-auto">
       <aside className="md:flex h-full w-96 flex-col inset-y-0 z-[10]">
         <ServerSidebar serverId={params.serverId} />
       </aside>
       <main className="h-full w-full z-[20]">{children}</main>
       <aside className="md:flex h-full w-72 flex-col right-0 z-[10] inset-y-0">
-        <MemberSidebarWrapper serverId={params.serverId} />
+        <MemberSidebar serverId={params.serverId} />
       </aside>
     </div>
   );

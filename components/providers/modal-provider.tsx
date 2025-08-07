@@ -16,11 +16,6 @@ import { MessageFileModal } from "@/components/modals/message-file-modal";
 import { CreateCategoryModal } from "../modals/create-category-modal";
 import { CssEditorModal } from "../modals/css-editor-modal";
 import { SwitchVoiceChannelModal } from "../modals/switch-voice-channel-modal";
-import { UserSettingsModal } from "../modals/user-settings-modal";
-import { DMCallModal } from "../modals/dm-call-modal";
-import { CreateDirectMessageModal } from "../modals/create-direct-message-modal";
-import { CreateGroupModal } from "../modals/create-group-modal";
-import { SetStatusModal } from "../modals/set-status-modal";
 
 export const ModalProvider = () => {
   const [isMounted, setIsMounted] = useState(false);
@@ -45,11 +40,6 @@ export const ModalProvider = () => {
       <CreateCategoryModal />
       <CssEditorModal initialCss="" />
       <SwitchVoiceChannelModal />
-      <UserSettingsModal />
-      <DMCallModal />
-      <CreateDirectMessageModal />
-      <CreateGroupModal />
-      <SetStatusModal />
     </>
   );
 };

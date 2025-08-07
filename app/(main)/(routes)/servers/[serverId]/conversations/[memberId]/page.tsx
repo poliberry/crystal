@@ -9,13 +9,24 @@ import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 import { MediaRoom } from "@/components/media-room";
 
-const PersonalSpacePage = async () => {
+type MemberIdPageProps = {
+  params: {
+    memberId: string;
+    serverId: string;
+  };
+  searchParams: {
+    video?: boolean;
+  };
+};
+
+const MemberIdPage = async ({ params, searchParams }: MemberIdPageProps) => {
   const profile = await currentProfile();
 
   if (!profile) return redirectToSignIn();
 
   const currentMember = await db.member.findFirst({
     where: {
+      serverId: params.serverId,
       profileId: profile.id,
     },
     include: {
@@ -27,10 +38,10 @@ const PersonalSpacePage = async () => {
 
   const conversation = await getOrCreateConversation(
     currentMember.id,
-    currentMember.id,
+    params.memberId,
   );
 
-  if (!conversation) redirect(`/`);
+  if (!conversation) redirect(`/servers/${params.serverId}`);
 
   const { memberOne, memberTwo } = conversation;
 
@@ -42,14 +53,19 @@ const PersonalSpacePage = async () => {
       <ChatHeader
         imageUrl={otherMember.profile.imageUrl}
         name={otherMember.profile.name}
-        type="personal-space"
+        serverId={params.serverId}
+        type="conversation"
       />
+
+      {searchParams.video && <MediaRoom chatId={conversation.id} video audio />}
+
+      {!searchParams.video && (
         <>
           <ChatMessages
             member={currentMember}
             name={otherMember.profile.name}
             chatId={conversation.id}
-            type="personal-space"
+            type="conversation"
             apiUrl="/api/direct-messages"
             paramKey="conversationId"
             paramValue={conversation.id}
@@ -61,15 +77,16 @@ const PersonalSpacePage = async () => {
 
           <ChatInput
             name={otherMember.profile.name}
-            type="personal-space"
+            type="conversation"
             apiUrl="/api/socket/direct-messages"
             query={{
               conversationId: conversation.id,
             }}
           />
         </>
+      )}
     </div>
   );
 };
 
-export default PersonalSpacePage;
+export default MemberIdPage;
