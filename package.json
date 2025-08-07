@@ -1,6 +1,6 @@
 {
-  "name": "crystal",
-  "version": "1.0.3",
+  "name": "discord-clone",
+  "version": "1.0.4",
   "private": true,
   "scripts": {
     "dev": "next dev",
