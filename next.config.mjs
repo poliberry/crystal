@@ -14,6 +14,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  devIndicators: false,
   webpack: (config, { isServer, dev }) => {
     // Don't optimize these packages
     config.externals = config.externals || [];
