@@ -288,7 +288,7 @@ Useful resources and dependencies that are used in Discord Clone.
 - [class-variance-authority](https://www.npmjs.com/package/class-variance-authority): ^0.7.0
 - [clsx](https://www.npmjs.com/package/clsx): ^2.1.0
 - [cmdk](https://www.npmjs.com/package/cmdk): ^1.0.0
-- [dayjs](https://www.npmjs.com/package/dayjs): ^1.11.13
+- [date-fns](https://www.npmjs.com/package/date-fns): ^3.6.0
 - [emoji-mart](https://www.npmjs.com/package/emoji-mart): ^5.5.2
 - [livekit-server-sdk](https://www.npmjs.com/package/livekit-server-sdk): ^2.1.2
 - [lucide-react](https://www.npmjs.com/package/lucide-react): ^0.363.0

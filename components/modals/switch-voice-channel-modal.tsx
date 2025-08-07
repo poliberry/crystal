@@ -53,9 +53,9 @@ export const SwitchVoiceChannelModal = () => {
     media.leave();
     onClose();
     setTimeout(() => {
-      const call_switch = new Audio("/sounds/call-switch.ogg");
-      call_switch.play();
-      media.join(channel?.id as string, channel?.name as string, server?.name as string, server?.id as string, "channel", true, false);
+      const call_connect = new Audio("/sounds/call-connect.ogg");
+      call_connect.play();
+      media.join(channel?.id as string, channel?.name as string, server?.name as string, true, false);
       router.push(`/servers/${params?.serverId}/channels/${channel?.id}`)
     }, 500);
   }

@@ -21,7 +21,6 @@ import { ActionTooltip } from "../action-tooltip";
 import { UserAvatar } from "../user-avatar";
 import { MediaEmbed, isSocialEmbed } from "./media-embed";
 import { utapi } from "@/app/api/uploadthing/route";
-import { useSocket } from "../providers/socket-provider";
 
 type ChatItemProps = {
   id: string;
@@ -70,31 +69,10 @@ export const ChatItem = ({
   socketQuery,
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [presenceStatus, setPresenceStatus] = useState<string | null>(member.profile.presenceStatus);
   const inputRef = useRef<ElementRef<"input">>(null);
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
-  const { socket } = useSocket();
-
-  // Listen for presence status updates
-  useEffect(() => {
-    if (!member.profile.userId) return;
-
-    const presenceHandler = (payload: { userId: string; presenceStatus: string | null }) => {
-      if (payload.userId === member.profile.userId) {
-        setPresenceStatus(payload.presenceStatus);
-      }
-    };
-
-    // @ts-ignore
-    socket.on("user:presence:update", presenceHandler);
-    
-    return () => {
-      // @ts-ignore
-      socket.off("user:presence:update", presenceHandler);
-    };
-  }, [member.profile.userId, socket]);
 
   const onMemberClick = () => {
     if (member.id === currentMember.id) return;

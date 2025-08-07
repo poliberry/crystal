@@ -11,7 +11,6 @@ import Image from "next/image";
 import { X, FileIcon, Plus, Send } from "lucide-react";
 import { useRef, useState } from "react";
 import clsx from "clsx";
-import { EmojiPicker } from "../emoji-picker";
 
 const formSchema = z.object({
   content: z.string().optional(),
@@ -57,25 +56,10 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (
-      !values.content &&
-      (!values.attachments || values.attachments.length === 0)
-    )
-      return;
+    if (!values.content && (!values.attachments || values.attachments.length === 0)) return;
     try {
-      if (type === "conversation") {
-        await axios.post(
-          `${apiUrl}?conversationId=${query.conversationId}`,
-          values
-        );
-        reset();
-      } else {
-        await axios.post(
-          `${apiUrl}?serverId=${query.serverId}&channelId=${query.channelId}`,
-          values
-        );
-        reset();
-      }
+      await axios.post(`${apiUrl}?serverId=${query.serverId}&channelId=${query.channelId}`, values);
+      reset();
     } catch (err) {
       console.error(err);
     }
@@ -92,7 +76,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
         files: droppedFiles,
       });
 
-      const newAttachments = uploaded.map((file) => ({
+      const newAttachments = uploaded.map(file => ({
         url: file.url,
         name: file.name,
         utId: file.key,
@@ -111,7 +95,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
     <FormProvider {...methods}>
       <div
         onDrop={handleDrop}
-        onDragOver={(e) => {
+        onDragOver={e => {
           e.preventDefault();
           setIsDragging(true);
         }}
@@ -124,16 +108,11 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
         {/* Overlay on drag */}
         {isDragging && (
           <div className="absolute inset-0 z-50 bg-black/40 rounded-md flex items-center justify-center pointer-events-none">
-            <p className="text-white text-sm font-medium">
-              Drop image to upload
-            </p>
+            <p className="text-white text-sm font-medium">Drop image to upload</p>
           </div>
         )}
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="flex flex-col gap-2 p-4"
-        >
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-2 p-4">
           {/* Uploaded files */}
           {fileUrls.length > 0 && (
             <div className="mb-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -157,9 +136,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
                         className="rounded mb-1 object-cover"
                       />
                     )}
-                    <span className="text-xs truncate max-w-[80px]">
-                      {att.name}
-                    </span>
+                    <span className="text-xs truncate max-w-[80px]">{att.name}</span>
                     <button
                       type="button"
                       className="absolute top-1 right-1 bg-rose-500 text-white p-1 rounded-full shadow-sm"
@@ -184,7 +161,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
             <div className="absolute left-2 top-1/2 -translate-y-1/2">
               <UploadButton
                 endpoint="messageFile"
-                onClientUploadComplete={(res) => {
+                onClientUploadComplete={res => {
                   if (res && res.length > 0) {
                     setValue("attachments", [
                       ...fileUrls,
@@ -196,12 +173,11 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
                     ]);
                   }
                 }}
-                onUploadError={(error) => {
+                onUploadError={error => {
                   console.error("Upload Error:", error);
                 }}
                 appearance={{
-                  button:
-                    "p-1 h-8 w-8 bg-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full shadow-none",
+                  button: "p-1 h-8 w-8 bg-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full shadow-none",
                   allowedContent: "hidden",
                 }}
                 content={{
@@ -213,13 +189,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
             </div>
             {/* Send button inside input, right side */}
             <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <Button
-                type="submit"
-                variant="ghost"
-                disabled={isSubmitting}
-                size="icon"
-                className="p-2"
-              >
+              <Button type="submit" variant="ghost" disabled={isSubmitting} size="icon" className="p-2">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -229,9 +199,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
               render={({ field }) => (
                 <Input
                   {...field}
-                  placeholder={`Message ${
-                    type === "channel" ? `#${name}` : name
-                  }`}
+                  placeholder={`Message ${type === "channel" ? `#${name}` : name}`}
                   disabled={isSubmitting}
                   className="flex-1 pl-12 pr-12 bg-transparent border-none focus:ring-0 focus:border-transparent"
                   autoComplete="off"

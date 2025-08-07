@@ -1,8 +1,0 @@
-// Ringtone sound for incoming calls
-// Place this file in public/sounds/ directory
-
-// This is a placeholder comment for the incoming-call.ogg sound file
-// You should add an actual sound file here for the ringtone to work
-
-// For testing purposes, you can use any .ogg audio file
-// Recommended: A looping ringtone sound that's not too loud
