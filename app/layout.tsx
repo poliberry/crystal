@@ -9,13 +9,14 @@ import { ModalProvider } from "@/components/providers/modal-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { SocketProvider } from "@/components/providers/socket-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { NotificationProvider } from "@/components/providers/notification-provider";
+import { DNDProvider } from "@/components/providers/dnd-provider";
+import { PathTracker } from "@/components/providers/path-tracker-provider";
 import { siteConfig } from "@/config";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 import { CustomCssInjector } from "@/components/custom-css-injector";
-
-const font = Hanken_Grotesk({ subsets: ["latin"] });
-
+import { ProgressProvider } from "@/components/progress-bar";
 
 export const viewport: Viewport = {
   themeColor: "#5865F2",
@@ -30,29 +31,36 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-        <html lang="en" suppressHydrationWarning>
-          <body
-            className={cn(
-              font.className,
-              "bg-white overflow-hidden",
-              "dark:bg-black"
-            )}
+      <html lang="en" suppressHydrationWarning>
+        <body
+          className={cn(
+            "hubot-sans bg-white overflow-hidden",
+            "dark:bg-black"
+          )}
+        >
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem={false}
+            storageKey="discord-theme"
           >
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem={false}
-              storageKey="discord-theme"
-            >
-              <SocketProvider>
-                <NextSSRPlugin
-                  routerConfig={extractRouterConfig(appFileRouter)}
-                />
-                <QueryProvider>{children}</QueryProvider>
-              </SocketProvider>
-            </ThemeProvider>
-          </body>
-        </html>
+            <SocketProvider>
+              <DNDProvider>
+                <NotificationProvider>
+                  <NextSSRPlugin
+                    routerConfig={extractRouterConfig(appFileRouter)}
+                  />
+                  <QueryProvider>
+                    <PathTracker />
+                    <ProgressProvider />
+                    {children}
+                  </QueryProvider>
+                </NotificationProvider>
+              </DNDProvider>
+            </SocketProvider>
+          </ThemeProvider>
+        </body>
+      </html>
     </ClerkProvider>
   );
 }

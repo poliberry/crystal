@@ -1,19 +1,22 @@
 "use client";
 
 import type { Member } from "@prisma/client";
-import { format } from "date-fns";
+import dayjs from "dayjs";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { Loader2, ServerCrash } from "lucide-react";
 import { type ElementRef, Fragment, useRef } from "react";
 
 import { useChatQuery } from "@/hooks/use-chat-query";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
 import { useChatSocket } from "@/hooks/use-chat-socket";
+import { useSocket } from "@/components/providers/socket-provider";
+import { useNotifications } from "@/hooks/use-notifications";
 import type { MessageWithMemberWithProfile } from "@/types";
 
 import { ChatItem } from "./chat-item";
 import { ChatWelcome } from "./chat-welcome";
 
-const DATE_FORMAT = "d MMM yyyy, HH:mm";
+const DATE_FORMAT = "D MMM YYYY, HH:mm";
 
 type ChatMessagesProps = {
   name: string;
@@ -41,6 +44,8 @@ export const ChatMessages = ({
   const queryKey = `chat:${chatId}`;
   const addKey = `chat:${chatId}:messages`;
   const updateKey = `chat:${chatId}:messages:update`;
+  const { socket } = useSocket();
+  const { markChannelAsRead, markConversationAsRead } = useNotifications();
 
   const chatRef = useRef<ElementRef<"div">>(null);
   const bottomRef = useRef<ElementRef<"div">>(null);
@@ -54,12 +59,28 @@ export const ChatMessages = ({
     });
 
   useChatSocket({ queryKey, addKey, updateKey });
+  
+  // Determine if this is a channel or conversation
+  const isChannel = type === "channel";
+  const channelId = isChannel ? chatId : undefined;
+  const conversationId = !isChannel ? chatId : undefined;
+
   useChatScroll({
     chatRef,
     bottomRef,
     loadMore: fetchNextPage,
     shouldLoadMore: !isFetchingNextPage && !!hasNextPage,
     count: data?.pages?.[0]?.items?.length ?? 0,
+    channelId,
+    conversationId,
+    onScrollToBottom: () => {
+      // Additional callback for when user scrolls to bottom
+      if (isChannel && channelId) {
+        markChannelAsRead(channelId);
+      } else if (conversationId) {
+        markConversationAsRead(conversationId);
+      }
+    },
   });
 
   if (status === "loading") {
@@ -91,41 +112,98 @@ export const ChatMessages = ({
       {!hasNextPage && <ChatWelcome type={type} name={name} />}
 
       {hasNextPage && (
-        <div className="flex justify-center">
+        <motion.div 
+          className="flex justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          layout="position"
+        >
           {isFetchingNextPage ? (
             <Loader2 className="h-6 w-6 text-zinc-500 animate-spin my-4" />
           ) : (
-            <button
+            <motion.button
               onClick={() => fetchNextPage()}
               className="text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 text-sm my-4 dark:hover-text-zinc-300 transition"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "tween", duration: 0.1 }}
             >
               Load previous messages
-            </button>
+            </motion.button>
           )}
-        </div>
+        </motion.div>
       )}
 
-      <div className="flex flex-col-reverse mt-auto">
-        {data?.pages?.map((group, i) => (
-          <Fragment key={i}>
-            {group.items.map((message: MessageWithMemberWithProfile) => (
-              <ChatItem
-                key={message.id}
-                currentMember={member}
-                member={message.member}
-                id={message.id}
-                content={message.content}
-                attachments={message.attachments}
-                deleted={message.deleted}
-                timestamp={format(new Date(message.createdAt), DATE_FORMAT)}
-                isUpdated={message.updatedAt !== message.createdAt}
-                socketUrl={socketUrl}
-                socketQuery={socketQuery}
-              />
-            ))}
-          </Fragment>
-        ))}
-      </div>
+      <LayoutGroup>
+        <motion.div 
+          className="flex flex-col-reverse mt-auto"
+          layout="position"
+          transition={{
+            layout: {
+              type: "tween",
+              duration: 0.2,
+              ease: "easeOut"
+            }
+          }}
+        >
+          <AnimatePresence initial={false} mode="sync">
+            {data?.pages?.map((group, i) => {
+              if (!group?.items) return null;
+              
+              return (
+                <Fragment key={i}>
+                  {group.items.map((message: MessageWithMemberWithProfile, messageIndex: number) => (
+                    <motion.div
+                      key={message.id}
+                      layoutId={`message-${message.id}`}
+                      initial={{ 
+                        opacity: 0, 
+                        y: 20,
+                        scale: 0.98
+                      }}
+                      animate={{ 
+                        opacity: 1, 
+                        y: 0,
+                        scale: 1
+                      }}
+                      exit={{ 
+                        opacity: 0, 
+                        scale: 0.95,
+                        transition: {
+                          duration: 0.15,
+                          ease: "easeIn"
+                        }
+                      }}
+                      transition={{
+                        type: "tween",
+                        duration: 0.3,
+                        ease: "easeOut",
+                        delay: Math.min(messageIndex * 0.01, 0.1) // Minimal stagger, capped at 100ms
+                      }}
+                      layout="position"
+                      style={{ willChange: "transform, opacity" }}
+                    >
+                      <ChatItem
+                        currentMember={member}
+                        member={message.member}
+                        id={message.id}
+                        content={message.content}
+                        attachments={message.attachments}
+                        deleted={message.deleted}
+                        timestamp={dayjs(message.createdAt).format(DATE_FORMAT)}
+                        isUpdated={message.updatedAt !== message.createdAt}
+                        socketUrl={socketUrl}
+                        socketQuery={socketQuery}
+                      />
+                    </motion.div>
+                  ))}
+                </Fragment>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
+      </LayoutGroup>
 
       <div ref={bottomRef} aria-hidden />
     </div>

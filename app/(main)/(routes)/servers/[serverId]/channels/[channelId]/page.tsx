@@ -13,6 +13,8 @@ import { GlobalDropzone } from "@/components/chat/global-dropzone";
 import { Metadata } from "next";
 import { metadata } from "@/app/layout";
 import Head from "next/head";
+import { PageContextProvider } from "@/components/providers/page-context-provider";
+import { NewMessagesBanner } from "@/components/new-messages-banner";
 
 type ChannelIdPageProps = {
   params: {
@@ -70,51 +72,66 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
     },
   });
 
-  if (!channel || !member) redirect("/");
+  if (!channel || !member || !server) redirect("/");
 
   return (
-    <div className="bg-transparent flex flex-col h-full">
-      {channel.type === ChannelType.TEXT && (
-        <ChatHeader
-          name={channel.name}
-          serverId={channel.serverId}
-          type="channel"
-        />
-      )}
-      {channel.type === ChannelType.TEXT && (
-        <>
-          <ChatMessages
+    <PageContextProvider
+      serverData={{
+        id: server.id,
+        name: server.name,
+        imageUrl: server.imageUrl,
+      }}
+      channelData={{
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+      }}
+      currentProfile={profile}
+    >
+      <div className="bg-transparent flex flex-col h-full">
+        {channel.type === ChannelType.TEXT && (
+          <ChatHeader
             name={channel.name}
-            chatId={channel.id}
-            member={member}
+            serverId={channel.serverId}
             type="channel"
-            apiUrl="/api/messages"
-            socketUrl="/api/socket/messages"
-            socketQuery={{
-              channelId: channel.id,
-              serverId: channel.serverId,
-            }}
-            paramKey="channelId"
-            paramValue={channel.id}
           />
-          <ChatInput
-            name={channel.name}
-            type="channel"
-            apiUrl="/api/socket/messages"
-            query={{
-              channelId: channel.id,
-              serverId: channel.serverId,
-            }}
-          />
-        </>
-      )}
+        )}
+        {channel.type === ChannelType.TEXT && (
+          <>
+            <NewMessagesBanner channelId={channel.id} />
+            <ChatMessages
+              name={channel.name}
+              chatId={channel.id}
+              member={member}
+              type="channel"
+              apiUrl="/api/messages"
+              socketUrl="/api/socket/messages"
+              socketQuery={{
+                channelId: channel.id,
+                serverId: channel.serverId,
+              }}
+              paramKey="channelId"
+              paramValue={channel.id}
+            />
+            <ChatInput
+              name={channel.name}
+              type="channel"
+              apiUrl="/api/socket/messages"
+              query={{
+                channelId: channel.id,
+                serverId: channel.serverId,
+              }}
+            />
+          </>
+        )}
 
-      {channel.type === ChannelType.AUDIO && (
-        <>
-          <MediaRoom channel={channel} server={server} />
-        </>
-      )}
-    </div>
+        {channel.type === ChannelType.AUDIO && (
+          <>
+            <MediaRoom channel={channel} server={server} />
+          </>
+        )}
+      </div>
+    </PageContextProvider>
   );
 };
 

@@ -1,6 +1,7 @@
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 import { sanitizeCss } from "@/lib/sanitize-css";
+import { clerkClient } from "@clerk/nextjs";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -21,15 +22,23 @@ export async function GET(req: Request) {
   return Response.json(profile);
 }
 
-export async function POST(req: Request) {
-  const { css } = await req.json();
+export async function PATCH(req: Request) {
+  const { bio, pronouns, displayName, username, bannerUrl } = await req.json();
 
   const userId = await currentProfile();
+
+  await clerkClient.users.updateUser(userId?.userId as string, {
+    username: username,
+  });
 
   await db.profile.update({
     where: { id: userId?.id },
     data: {
-      customCss: css,
+      bio,
+      pronouns: pronouns,
+      name: username,
+      globalName: displayName,
+      bannerUrl: bannerUrl,
     }
   });
 

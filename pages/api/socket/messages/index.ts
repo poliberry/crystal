@@ -81,6 +81,38 @@ export default async function handler(
 
     res?.socket?.server?.io?.emit(channelKey, message);
 
+    // Create notifications for other members in the server channel
+    const otherMembers = server.members.filter(
+      (serverMember) => serverMember.profileId !== profile.id
+    );
+
+    for (const serverMember of otherMembers) {
+      try {
+        const notification = await db.notification.create({
+          data: {
+            type: "MESSAGE",
+            title: `${profile.name} (#${channel.name} / ${server.name})`,
+            content: content?.length > 100 ? content.substring(0, 100) + "..." : (content || ""),
+            profileId: serverMember.profileId,
+            triggeredById: profile.id,
+            serverId: serverId as string,
+            channelId: channelId as string,
+            read: false,
+          },
+          include: {
+            triggeredBy: true,
+            server: true,
+            channel: true,
+          },
+        });
+
+        // Emit notification to the user's specific room
+        res?.socket?.server?.io?.to(`user:${serverMember.profileId}`).emit("notification:new", notification);
+      } catch (notificationError) {
+        console.error(`Failed to create notification for user ${serverMember.profileId}:`, notificationError);
+      }
+    }
+
     return res.status(200).json(message);
   } catch (error: unknown) {
     console.error("[MESSAGES_POST]: ", error);

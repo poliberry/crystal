@@ -22,7 +22,7 @@ export const ChatWelcome = ({ name, type }: ChatWelcomeProps) => {
         {type === "channel"
           ? `This is the start of #${name} channel.`
           : type === "conversation"
-          ? `This is the start of your conversation with ${name}`
+          ? `This is the start of your conversation with ${name}.`
           : `This is your personal space. You can use it to chat with yourself (if that's your thing) or to store messages and files for later use.`}
       </p>
       <Separator />

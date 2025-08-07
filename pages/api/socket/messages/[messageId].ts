@@ -86,9 +86,8 @@ export default async function handler(
           id: messageId as string,
         },
         data: {
-          fileUrl: null,
-          content: "This message has been deleted.",
           deleted: true,
+          content: "This message has been deleted.",
         },
         include: {
           member: {
@@ -96,6 +95,13 @@ export default async function handler(
               profile: true,
             },
           },
+        },
+      });
+
+      // Delete all attachments for this message
+      await db.attachment.deleteMany({
+        where: {
+          messageId: messageId as string,
         },
       });
     }

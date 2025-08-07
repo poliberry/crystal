@@ -1,10 +1,11 @@
+"use client";
+
 import { ChannelType, MemberRole } from "@prisma/client";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video } from "lucide-react";
-import { redirect } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 
 import { ServerChannel } from "./server-channel";
@@ -12,9 +13,12 @@ import { ServerHeader } from "./server-header";
 import { ServerMember } from "./server-member";
 import { ServerSearch } from "./server-search";
 import { ServerSection } from "./server-section";
+import { useSocket } from "../providers/socket-provider";
 
 type ServerSidebarProps = {
   serverId: string;
+  initialData: any; // Pass initial server data as prop
+  currentProfile: any; // Pass current profile as prop
 };
 
 const iconMap = {
@@ -31,47 +35,33 @@ const roleIconMap = {
   [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />,
 };
 
-export const MemberSidebar = async ({ serverId }: ServerSidebarProps) => {
-  const profile = await currentProfile();
+export const MemberSidebar = ({ serverId, initialData, currentProfile }: ServerSidebarProps) => {
+  const { socket } = useSocket();
+  const [server, setServer] = useState(initialData);
+  const profile = currentProfile;
 
-  if (!profile) redirect("/");
+  useEffect(() => {
+    if (!socket) return;
 
-  const server = await db.server.findUnique({
-    where: {
-      id: serverId,
-    },
-    include: {
-      channels: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      members: {
-        include: {
-          profile: true,
-        },
-        orderBy: {
-          role: "asc",
-        },
-      },
-    },
-  });
+    // Listen for profile updates
+    const memberUpdateKey = `members:poll`;
 
-  if (!server) redirect("/");
+    const handleMemberUpdate = async () => {
+      const data = await fetch(`/api/servers/${serverId}/members`);
+      const updatedServer = await data.json();
+      setServer(updatedServer);
+    };
 
-  const textChannels = server?.channels.filter(
-    (channel) => channel.type === ChannelType.TEXT,
-  );
-  const audioChannels = server?.channels.filter(
-    (channel) => channel.type === ChannelType.AUDIO,
-  );
-  const videoChannels = server?.channels.filter(
-    (channel) => channel.type === ChannelType.VIDEO,
-  );
-  const members = server?.members
+    socket.on(memberUpdateKey, handleMemberUpdate);
 
+    return () => {
+      socket.off(memberUpdateKey, handleMemberUpdate);
+    };
+  }, [socket, serverId]);
+
+  const members = server?.members;
   const role = server.members.find(
-    (member) => member.profileId === profile.id,
+    (member: any) => member.profileId === profile.id,
   )?.role;
 
   return (
@@ -89,7 +79,7 @@ export const MemberSidebar = async ({ serverId }: ServerSidebarProps) => {
           {!!members?.length && (
             <div className="mb-2">
               <div className="space-y-[2px]">
-                {members.map((member) => (
+                {members.map((member: any) => (
                   <ServerMember
                     key={member.id}
                     member={member}

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { ActionTooltip } from "@/components/action-tooltip";
 import { cn } from "@/lib/utils";
+import { NotificationBadge } from "@/components/notification-badge";
 
 type NavigationItemProps = {
   id: string;
@@ -31,6 +32,11 @@ export const NavigationItem = ({ id, imageUrl, name }: NavigationItemProps) => {
           )}
         >
           <Image src={imageUrl} alt={name} fill />
+          <NotificationBadge 
+            type="server" 
+            serverId={id} 
+            className="top-0 right-0 -translate-y-1 translate-x-1" 
+          />
         </div>
       </button>
     </ActionTooltip>

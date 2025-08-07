@@ -15,7 +15,12 @@ export type ModalType =
   | "editChannel"
   | "messageFile"
   | "switchVoiceChannel"
-  | "deleteMessage";
+  | "userSettings"
+  | "dmCall"
+  | "deleteMessage"
+  | "createDirectMessage"
+  | "setStatus"
+  | "createGroup";
 
 type ModalData = {
   server?: Server;
@@ -24,6 +29,9 @@ type ModalData = {
   categoryId?: string;
   apiUrl?: string;
   query?: Record<string, any>;
+  callData?: any;
+  currentMember?: any;
+  currentProfile?: any;
 };
 
 type ModalStore = {
