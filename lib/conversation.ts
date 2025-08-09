@@ -2,30 +2,30 @@ import { db } from "./db";
 import { ConversationType } from "@prisma/client";
 
 export const getOrCreateConversation = async (
-  memberOneId: string,
-  memberTwoId: string,
+  profileOneId: string,
+  profileTwoId: string,
 ) => {
-  // Find existing conversation between these two members
-  let conversation = await findConversation(memberOneId, memberTwoId);
+  // Find existing conversation between these two profiles
+  let conversation = await findConversation(profileOneId, profileTwoId);
 
   if (!conversation) {
-    conversation = await createNewConversation(memberOneId, memberTwoId);
+    conversation = await createNewConversation(profileOneId, profileTwoId);
   }
 
   return conversation;
 };
 
-const findConversation = async (memberOneId: string, memberTwoId: string) => {
+const findConversation = async (profileOneId: string, profileTwoId: string) => {
   try {
-    // Find a direct message conversation where both members are participants
+    // Find a direct message conversation where both profiles are participants
     return await db.conversation.findFirst({
       where: {
-        type: "DIRECT_MESSAGE" as any, // Use string literal as fallback
+        type: "DIRECT_MESSAGE",
         AND: [
           {
             members: {
               some: {
-                memberId: memberOneId,
+                profileId: profileOneId,
                 leftAt: null,
               },
             },
@@ -33,7 +33,7 @@ const findConversation = async (memberOneId: string, memberTwoId: string) => {
           {
             members: {
               some: {
-                memberId: memberTwoId,
+                profileId: profileTwoId,
                 leftAt: null,
               },
             },
@@ -46,11 +46,7 @@ const findConversation = async (memberOneId: string, memberTwoId: string) => {
             leftAt: null,
           },
           include: {
-            member: {
-              include: {
-                profile: true,
-              },
-            },
+            profile: true,
           },
         },
       },
@@ -62,22 +58,22 @@ const findConversation = async (memberOneId: string, memberTwoId: string) => {
 };
 
 const createNewConversation = async (
-  memberOneId: string,
-  memberTwoId: string,
+  profileOneId: string,
+  profileTwoId: string,
 ) => {
   try {
-    console.log("Creating conversation between:", { memberOneId, memberTwoId });
+    console.log("Creating conversation between profiles:", { profileOneId, profileTwoId });
     
     const conversation = await db.conversation.create({
       data: {
-        type: "DIRECT_MESSAGE" as any, // Use string literal as fallback
+        type: "DIRECT_MESSAGE",
         members: {
           create: [
             {
-              memberId: memberOneId,
+              profileId: profileOneId,
             },
             {
-              memberId: memberTwoId,
+              profileId: profileTwoId,
             },
           ],
         },
@@ -85,11 +81,7 @@ const createNewConversation = async (
       include: {
         members: {
           include: {
-            member: {
-              include: {
-                profile: true,
-              },
-            },
+            profile: true,
           },
         },
       },
@@ -105,36 +97,26 @@ const createNewConversation = async (
 
 // Create a group conversation
 export const createGroupConversation = async (
-  creatorId: string,
-  memberIds: string[],
+  creatorProfileId: string,
+  profileIds: string[],
   name?: string,
 ) => {
   try {
     // Include the creator in the member list if not already present
-    const allMemberIds = Array.from(new Set([creatorId, ...memberIds]));
+    const allProfileIds = Array.from(new Set([creatorProfileId, ...profileIds]));
 
     return await db.conversation.create({
       data: {
-        type: "GROUP_MESSAGE" as any, // Use string literal as fallback
+        type: "GROUP_MESSAGE",
         name,
-        creatorId,
         members: {
-          create: allMemberIds.map((memberId) => ({
-            memberId,
+          create: allProfileIds.map((profileId) => ({
+            profileId,
           })),
         },
       },
       include: {
         members: {
-          include: {
-            member: {
-              include: {
-                profile: true,
-              },
-            },
-          },
-        },
-        creator: {
           include: {
             profile: true,
           },
@@ -150,13 +132,13 @@ export const createGroupConversation = async (
 // Add members to an existing conversation
 export const addMembersToConversation = async (
   conversationId: string,
-  memberIds: string[],
+  profileIds: string[],
 ) => {
   try {
     await db.conversationMember.createMany({
-      data: memberIds.map((memberId) => ({
+      data: profileIds.map((profileId) => ({
         conversationId,
-        memberId,
+        profileId,
       })),
       skipDuplicates: true,
     });
@@ -167,16 +149,13 @@ export const addMembersToConversation = async (
         members: {
           where: { leftAt: null },
           include: {
-            member: {
-              include: {
-                profile: true,
-              },
-            },
+            profile: true,
           },
         },
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("Error adding members to conversation:", error);
     return null;
   }
 };
@@ -184,13 +163,13 @@ export const addMembersToConversation = async (
 // Remove a member from a conversation (set leftAt timestamp)
 export const removeMemberFromConversation = async (
   conversationId: string,
-  memberId: string,
+  profileId: string,
 ) => {
   try {
     await db.conversationMember.updateMany({
       where: {
         conversationId,
-        memberId,
+        profileId,
         leftAt: null,
       },
       data: {
@@ -199,7 +178,8 @@ export const removeMemberFromConversation = async (
     });
 
     return true;
-  } catch {
+  } catch (error) {
+    console.error("Error removing member from conversation:", error);
     return false;
   }
 };

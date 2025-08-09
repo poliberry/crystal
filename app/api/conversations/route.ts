@@ -29,7 +29,16 @@ export async function POST(req: Request) {
       return new NextResponse("Cannot create conversation with yourself", { status: 400 });
     }
 
-    // First, check if a conversation already exists between these profiles
+    // Verify the other profile exists
+    const otherProfile = await db.profile.findUnique({
+      where: { id: otherProfileId },
+    });
+
+    if (!otherProfile) {
+      return new NextResponse("Target user not found", { status: 404 });
+    }
+
+    // Check if a conversation already exists between these profiles
     const existingConversation = await db.conversation.findFirst({
       where: {
         type: "DIRECT_MESSAGE",
@@ -37,21 +46,17 @@ export async function POST(req: Request) {
           {
             members: {
               some: {
-                member: {
-                  profileId: profile.id,
-                },
+                profileId: profile.id,
                 leftAt: null,
-              },
+              } as any,
             },
           },
           {
             members: {
               some: {
-                member: {
-                  profileId: otherProfileId,
-                },
+                profileId: otherProfileId,
                 leftAt: null,
-              },
+              } as any,
             },
           },
         ],
@@ -62,12 +67,8 @@ export async function POST(req: Request) {
             leftAt: null,
           },
           include: {
-            member: {
-              include: {
-                profile: true,
-              },
-            },
-          },
+            profile: true,
+          } as any,
         },
       },
     });
@@ -76,73 +77,26 @@ export async function POST(req: Request) {
       return NextResponse.json(existingConversation);
     }
 
-    // Find member records for both profiles from any shared server
-    const [currentMembers, otherMembers] = await Promise.all([
-      db.member.findMany({
-        where: { profileId: profile.id },
-      }),
-      db.member.findMany({
-        where: { profileId: otherProfileId },
-      })
-    ]);
-
-    // Try to find a shared server where both users are members
-    let currentMember = null;
-    let otherMember = null;
-
-    for (const currMember of currentMembers) {
-      const foundOtherMember = otherMembers.find(
-        (otherMem) => otherMem.serverId === currMember.serverId
-      );
-      if (foundOtherMember) {
-        currentMember = currMember;
-        otherMember = foundOtherMember;
-        break;
-      }
-    }
-
-    // If no shared server, use any available member records
-    if (!currentMember && currentMembers.length > 0) {
-      currentMember = currentMembers[0];
-    }
-
-    if (!otherMember && otherMembers.length > 0) {
-      otherMember = otherMembers[0];
-    }
-
-    // If either user has no server memberships, they can't create conversations yet
-    if (!currentMember) {
-      return new NextResponse("Current user must be a member of at least one server", { status: 400 });
-    }
-
-    if (!otherMember) {
-      return new NextResponse("Target user must be a member of at least one server", { status: 400 });
-    }
-
-    // Create new conversation
+    // Create new conversation with profile-based members
     const conversation = await db.conversation.create({
       data: {
         type: "DIRECT_MESSAGE",
         members: {
           create: [
             {
-              memberId: currentMember.id,
-            },
+              profileId: profile.id,
+            } as any,
             {
-              memberId: otherMember.id,
-            },
+              profileId: otherProfileId,
+            } as any,
           ],
         },
       },
       include: {
         members: {
           include: {
-            member: {
-              include: {
-                profile: true,
-              },
-            },
-          },
+            profile: true,
+          } as any,
         },
       },
     });

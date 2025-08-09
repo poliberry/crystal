@@ -19,22 +19,20 @@ import { ConversationType } from "@prisma/client";
 
 type ServerChannelListProps = {
   conversations: any[];
-  currentMember: any;
   currentProfile: any;
 };
 
 export const ServerChannelList = ({ 
   conversations, 
-  currentMember, 
   currentProfile 
 }: ServerChannelListProps) => {
 
-  // Helper function to get the other member in a direct message
+  // Helper function to get the other profile in a direct message
   const getDirectMessagePartner = (conversation: any) => {
     const otherMember = conversation.members.find(
-      (member: any) => member.memberId !== currentMember.id
+      (member: any) => member.profileId !== currentProfile.id
     );
-    return otherMember?.member;
+    return otherMember?.profile;
   };
 
   // Helper function to get conversation display name
@@ -43,7 +41,7 @@ export const ServerChannelList = ({
       return conversation.name || "Group Chat";
     } else {
       const partner = getDirectMessagePartner(conversation);
-      return partner?.profile?.name || "Unknown User";
+      return partner?.name || "Unknown User";
     }
   };
 
@@ -54,7 +52,7 @@ export const ServerChannelList = ({
       return null;
     } else {
       const partner = getDirectMessagePartner(conversation);
-      return partner?.profile?.imageUrl;
+      return partner?.imageUrl;
     }
   };
 
@@ -64,7 +62,6 @@ export const ServerChannelList = ({
         <ConversationChannel
           key={conversation.id}
           conversation={conversation}
-          currentMember={currentMember}
           currentProfile={currentProfile}
           name={getConversationName(conversation)}
           avatar={getConversationAvatar(conversation)}

@@ -22,22 +22,13 @@ export const ConversationSidebar = async () => {
 
   if (!profile) redirect("/");
 
-  // Get member record
-  const member = await db.member.findFirst({
-    where: {
-      profileId: profile.id,
-    },
-  });
-
-  if (!member) redirect("/");
-
   try {
-    // More efficient query using the junction table directly
+    // Get conversations for this profile directly
     const conversationMembers = await db.conversationMember.findMany({
       where: {
-        memberId: member.id,
+        profileId: profile.id,
         leftAt: null, // Only active conversations
-      },
+      } as any,
       include: {
         conversation: {
           include: {
@@ -46,12 +37,8 @@ export const ConversationSidebar = async () => {
                 leftAt: null,
               },
               include: {
-                member: {
-                  include: {
-                    profile: true,
-                  },
-                },
-              },
+                profile: true,
+              } as any,
             },
             directMessages: {
               take: 1,
@@ -59,21 +46,12 @@ export const ConversationSidebar = async () => {
                 createdAt: "desc",
               },
               include: {
-                member: {
-                  include: {
-                    profile: true,
-                  },
-                },
-              },
-            },
-            creator: {
-              include: {
                 profile: true,
-              },
+              } as any,
             },
           },
         },
-      },
+      } as any,
       orderBy: {
         conversation: {
           updatedAt: "desc",
@@ -86,7 +64,6 @@ export const ConversationSidebar = async () => {
     return (
       <ConversationSidebarClient
         initialConversations={conversations}
-        currentMember={member}
         currentProfile={profile}
       />
     );
@@ -94,7 +71,7 @@ export const ConversationSidebar = async () => {
     console.error("Error loading conversations:", error);
     return (
       <div className="flex flex-col h-full text-primary w-full bg-transparent border-r border-l border-muted">
-        <ConversationHeader currentMember={member} currentProfile={profile} />
+        <ConversationHeader currentProfile={profile} />
         <ScrollArea className="flex-1 px-3 dark:bg-black bg-white">
           <div className="mt-2">
             <div className="mb-2 p-4 text-center text-muted-foreground">

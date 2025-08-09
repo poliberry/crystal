@@ -8,11 +8,10 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 
 type ConversationHeaderProps = {
-  currentMember: any;
   currentProfile: any;
 };
 
-export const ConversationHeader = ({ currentMember, currentProfile }: ConversationHeaderProps) => {
+export const ConversationHeader = ({ currentProfile }: ConversationHeaderProps) => {
   const { onOpen } = useModal();
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -24,7 +23,7 @@ export const ConversationHeader = ({ currentMember, currentProfile }: Conversati
         <div className="flex items-center gap-x-1">
           <ActionTooltip label="Create Group">
             <Button
-              onClick={() => onOpen("createGroup", { currentMember, currentProfile })}
+              onClick={() => onOpen("createGroup", { currentProfile })}
               variant="ghost"
               size="sm"
               className="p-2"
@@ -34,7 +33,7 @@ export const ConversationHeader = ({ currentMember, currentProfile }: Conversati
           </ActionTooltip>
           <ActionTooltip label="Start DM">
             <Button
-              onClick={() => onOpen("createDirectMessage", { currentMember, currentProfile })}
+              onClick={() => onOpen("createDirectMessage", { currentProfile })}
               variant="ghost"
               size="sm"
               className="p-2"

@@ -29,6 +29,10 @@ model Profile {
   members  Member[]
   channels Channel[]
 
+  // Conversation relations for profile-based messaging
+  conversationMembers ConversationMember[]
+  directMessages      DirectMessage[]
+
   // Notification relations
   notifications          Notification[]
   triggeredNotifications Notification[] @relation("NotificationTriggeredBy")
@@ -214,8 +218,13 @@ model ConversationMember {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  memberId String
-  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  // Changed from memberId to profileId for direct profile-based conversations
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Keep memberId as optional for server-context conversations
+  memberId String?
+  member   Member? @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   // When the member joined the conversation
   joinedAt DateTime @default(now())
@@ -226,8 +235,9 @@ model ConversationMember {
   // Last time the member read messages in this conversation
   lastReadAt DateTime?
 
-  @@unique([conversationId, memberId])
+  @@unique([conversationId, profileId])
   @@index([conversationId])
+  @@index([profileId])
   @@index([memberId])
 }
 
@@ -238,8 +248,13 @@ model DirectMessage {
   // Updated to use the new Attachments relationship
   attachments Attachment[]
 
-  memberId String
-  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  // Changed to work with profiles for direct messaging
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Keep memberId as optional for server-context messages
+  memberId String?
+  member   Member? @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -252,6 +267,7 @@ model DirectMessage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([profileId])
   @@index([memberId])
   @@index([conversationId])
   @@index([replyToId])

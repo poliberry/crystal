@@ -33,7 +33,6 @@ import { UnreadDot } from "../unread-dot";
 
 type ServerChannelProps = {
   conversation: any;
-  currentMember: any;
   currentProfile: any;
   name: string;
   avatar?: string;
@@ -50,7 +49,6 @@ const iconMap = {
 
 export const ConversationChannel = ({
   conversation,
-  currentMember,
   currentProfile,
   name,
   avatar,
@@ -67,13 +65,13 @@ export const ConversationChannel = ({
   const [users, setUsers] = useState<any[]>([]);
   const [partnerPresenceStatus, setPartnerPresenceStatus] = useState<string | null>(null);
 
-  // Helper function to get the other member in a direct message
+  // Helper function to get the other profile in a direct message
   const getDirectMessagePartner = () => {
     if (type !== ConversationType.GROUP_MESSAGE) {
       const otherMember = conversation.members.find(
-        (member: any) => member.memberId !== currentMember.id
+        (member: any) => member.profileId !== currentProfile.id
       );
-      return otherMember?.member;
+      return otherMember?.profile;
     }
     return null;
   };
@@ -82,8 +80,8 @@ export const ConversationChannel = ({
 
   // Initialize partner presence status
   useEffect(() => {
-    if (partner?.profile?.presenceStatus) {
-      setPartnerPresenceStatus(partner.profile.presenceStatus);
+    if (partner?.presenceStatus) {
+      setPartnerPresenceStatus(partner.presenceStatus);
     }
   }, [partner?.profile?.presenceStatus]);
 

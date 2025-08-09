@@ -8,13 +8,11 @@ import { ConversationHeader } from "./conversation-header";
 
 interface ConversationSidebarClientProps {
   initialConversations: any[];
-  currentMember: any;
   currentProfile: any;
 }
 
 export const ConversationSidebarClient = ({
   initialConversations,
-  currentMember,
   currentProfile,
 }: ConversationSidebarClientProps) => {
   const { socket } = useSocket();
@@ -53,13 +51,12 @@ export const ConversationSidebarClient = ({
 
   return (
     <div className="flex flex-col h-full text-primary w-full bg-transparent border-r border-l border-muted">
-      <ConversationHeader currentMember={currentMember} currentProfile={currentProfile} />
+      <ConversationHeader currentProfile={currentProfile} />
       <ScrollArea className="flex-1 px-3 dark:bg-black bg-white">
         <div className="mt-2">
           <div className="mb-2">
             <ServerChannelList
               conversations={conversations}
-              currentMember={currentMember}
               currentProfile={currentProfile}
             />
           </div>
