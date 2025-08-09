@@ -28,10 +28,124 @@ export async function POST(req: Request) {
     if (otherProfileId === profile.id) {
       return new NextResponse("Cannot create conversation with yourself", { status: 400 });
     }
-    // Use the existing conversation utility
-    const { getOrCreateConversation } = await import("@/lib/conversation");
-    
-    const conversation = await getOrCreateConversation(profile.id, otherProfileId);
+
+    // First, check if a conversation already exists between these profiles
+    const existingConversation = await db.conversation.findFirst({
+      where: {
+        type: "DIRECT_MESSAGE",
+        AND: [
+          {
+            members: {
+              some: {
+                member: {
+                  profileId: profile.id,
+                },
+                leftAt: null,
+              },
+            },
+          },
+          {
+            members: {
+              some: {
+                member: {
+                  profileId: otherProfileId,
+                },
+                leftAt: null,
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        members: {
+          where: {
+            leftAt: null,
+          },
+          include: {
+            member: {
+              include: {
+                profile: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (existingConversation) {
+      return NextResponse.json(existingConversation);
+    }
+
+    // Find member records for both profiles from any shared server
+    const [currentMembers, otherMembers] = await Promise.all([
+      db.member.findMany({
+        where: { profileId: profile.id },
+      }),
+      db.member.findMany({
+        where: { profileId: otherProfileId },
+      })
+    ]);
+
+    // Try to find a shared server where both users are members
+    let currentMember = null;
+    let otherMember = null;
+
+    for (const currMember of currentMembers) {
+      const foundOtherMember = otherMembers.find(
+        (otherMem) => otherMem.serverId === currMember.serverId
+      );
+      if (foundOtherMember) {
+        currentMember = currMember;
+        otherMember = foundOtherMember;
+        break;
+      }
+    }
+
+    // If no shared server, use any available member records
+    if (!currentMember && currentMembers.length > 0) {
+      currentMember = currentMembers[0];
+    }
+
+    if (!otherMember && otherMembers.length > 0) {
+      otherMember = otherMembers[0];
+    }
+
+    // If either user has no server memberships, they can't create conversations yet
+    if (!currentMember) {
+      return new NextResponse("Current user must be a member of at least one server", { status: 400 });
+    }
+
+    if (!otherMember) {
+      return new NextResponse("Target user must be a member of at least one server", { status: 400 });
+    }
+
+    // Create new conversation
+    const conversation = await db.conversation.create({
+      data: {
+        type: "DIRECT_MESSAGE",
+        members: {
+          create: [
+            {
+              memberId: currentMember.id,
+            },
+            {
+              memberId: otherMember.id,
+            },
+          ],
+        },
+      },
+      include: {
+        members: {
+          include: {
+            member: {
+              include: {
+                profile: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
     if (!conversation) {
       return new NextResponse("Failed to create conversation", { status: 500 });
