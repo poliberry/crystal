@@ -123,14 +123,7 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   return (
     <Card
       className={`md:block max-h-auto absolute top-10 right-0 min-w-[280px] max-w-full border-none flex flex-col rounded-none items-start`}
-    >
-      {/* DND Mode Indicator */}
-      {isDND && (
-        <div className="w-full bg-red-500 text-white text-center py-1 text-xs font-semibold">
-          🔕 Do Not Disturb Mode - Notifications and calls are muted
-        </div>
-      )}
-      
+    > 
       <div className={cn(
         "flex items-center gap-x-3 w-full pl-2",
         livekit.connected ? "justify-start" : "justify-between"
