@@ -33,11 +33,9 @@ export async function POST(req: Request) {
     const [currentMembers, otherMembers] = await Promise.all([
       db.member.findMany({
         where: { profileId: profile.id },
-        include: { server: true }
       }),
       db.member.findMany({
         where: { profileId: otherProfileId },
-        include: { server: true }
       })
     ]);
 
