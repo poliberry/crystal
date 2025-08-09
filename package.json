@@ -9,6 +9,9 @@
     "lint": "next lint",
     "postinstall": "prisma generate"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "author": {
     "name": "Sanidhya Kumar Verma",
     "email": "sanidhya.verma12345@gmail.com",
