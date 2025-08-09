@@ -28,48 +28,10 @@ export async function POST(req: Request) {
     if (otherProfileId === profile.id) {
       return new NextResponse("Cannot create conversation with yourself", { status: 400 });
     }
-
-    // Find member records for both profiles from any shared server
-    const [currentMembers, otherMembers] = await Promise.all([
-      db.member.findMany({
-        where: { profileId: profile.id },
-      }),
-      db.member.findMany({
-        where: { profileId: otherProfileId },
-      })
-    ]);
-
-    if (currentMembers.length === 0) {
-      return new NextResponse("Current user has no server memberships", { status: 404 });
-    }
-
-    if (otherMembers.length === 0) {
-      return new NextResponse("Target user has no server memberships", { status: 404 });
-    }
-
-    // Find a shared server where both users are members
-    let currentMember = null;
-    let otherMember = null;
-
-    for (const currMember of currentMembers) {
-      const foundOtherMember = otherMembers.find(
-        (otherMem) => otherMem.serverId === currMember.serverId
-      );
-      if (foundOtherMember) {
-        currentMember = currMember;
-        otherMember = foundOtherMember;
-        break;
-      }
-    }
-
-    if (!currentMember || !otherMember) {
-      return new NextResponse("Users are not members of the same server", { status: 400 });
-    }
-
     // Use the existing conversation utility
     const { getOrCreateConversation } = await import("@/lib/conversation");
     
-    const conversation = await getOrCreateConversation(currentMember.id, otherMember.id);
+    const conversation = await getOrCreateConversation(profile.id, otherProfileId);
 
     if (!conversation) {
       return new NextResponse("Failed to create conversation", { status: 500 });
