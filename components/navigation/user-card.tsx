@@ -43,7 +43,7 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   const { socket } = useSocket();
   const { localParticipant } = useLocalParticipant();
   const livekit = useLiveKit();
-  const { isDND } = useDND();
+  const { isDND, updateStatus } = useDND();
   const [presence, setPresence] = useState<"ONLINE" | "IDLE" | "DND" | "OFFLINE">("ONLINE");
   const idleTimeout = useRef<NodeJS.Timeout | null>(null);
   const [showCallUi, setShowCallUi] = useState(true);
@@ -55,15 +55,10 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   const setOnline = async (status: { presence: "ONLINE" | "IDLE" | "DND" | "OFFLINE" }) => {
     setPresence(status.presence);
     if (idleTimeout.current) clearTimeout(idleTimeout.current);
-    // Call API to update status
+    // Update status using the DND context
     try {
-      await fetch("/api/socket/user-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: status.presence }),
-      });
+      await updateStatus(status.presence);
     } catch (error) {
-      // Optionally handle error
       console.error("Failed to update user status:", error);
     }
   };

@@ -11,7 +11,7 @@ import { io as ClientIO } from "socket.io-client";
 import { useModal } from "@/hooks/use-modal-store";
 import { useParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { shouldReceiveCallAlerts } from "@/hooks/use-dnd-status";
+import { useDND } from "@/components/providers/dnd-provider";
 
 type SocketContextType = {
   socket: any | null;
@@ -34,6 +34,7 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
   const { onOpen } = useModal();
   const params = useParams();
   const { user } = useUser();
+  const { checkCallPermission } = useDND();
 
   // Fetch current profile ID
   useEffect(() => {
@@ -76,15 +77,15 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
     });
 
     // Listen for incoming call events
-    socketInstance.on("call:incoming", (callData: any) => {
+    socketInstance.on("call:incoming", async (callData: any) => {
       // Check if user should receive call alerts (not in DND mode)
-      const userStatus = user?.publicMetadata?.presence as string || localStorage.getItem("user-presence-status");
+      const canReceiveCalls = await checkCallPermission();
       
       // Only show the modal if the user is not the caller, is in the conversation, and not in DND mode
       if (callData.callerId !== currentProfileId && 
           (params?.conversationId === callData.conversationId || 
            callData.participantIds?.includes(currentProfileId)) &&
-          shouldReceiveCallAlerts(userStatus)) {
+          canReceiveCalls) {
         
         onOpen("dmCall", {
           callData: {

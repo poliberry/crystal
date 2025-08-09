@@ -17,8 +17,31 @@ interface CreateNotificationOptions {
 
 export async function createNotification(options: CreateNotificationOptions) {
   try {
+    // Filter out recipients who are in DND mode
+    const recipientsWithStatus = await db.profile.findMany({
+      where: {
+        id: {
+          in: options.recipientProfileIds,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    // Only include recipients who are not in DND mode
+    const filteredRecipientIds = recipientsWithStatus
+      .filter(profile => profile.status !== "DND")
+      .map(profile => profile.id);
+
+    if (filteredRecipientIds.length === 0) {
+      // No recipients to notify (all are in DND mode)
+      return [];
+    }
+
     const notifications = await Promise.all(
-      options.recipientProfileIds.map((recipientId) =>
+      filteredRecipientIds.map((recipientId) =>
         db.notification.create({
           data: {
             type: options.type,

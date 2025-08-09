@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useUser } from "@clerk/nextjs";
-import { shouldReceiveNotifications } from "@/hooks/use-dnd-status";
+import { useDND } from "@/components/providers/dnd-provider";
 import { useEffect, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { NotificationItem } from "./notification-item";
@@ -24,6 +24,7 @@ export const TopNavigationBar = () => {
   const params = useParams();
   const { socket } = useSocket();
   const { user } = useUser();
+  const { checkNotificationPermission } = useDND();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pageContext, setPageContext] = useState<{
@@ -66,15 +67,15 @@ export const TopNavigationBar = () => {
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewNotification = (notification: any) => {
+    const handleNewNotification = async (notification: any) => {
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
       
       // Check if user should receive notifications (not in DND mode)
-      const userStatus = user?.publicMetadata?.presence as string || localStorage.getItem("user-presence-status");
+      const canReceiveNotifications = await checkNotificationPermission();
       
       // Show native toast notification only if not in DND mode
-      if (shouldReceiveNotifications(userStatus) && 
+      if (canReceiveNotifications && 
           typeof window !== "undefined" && 
           "Notification" in window && 
           Notification.permission === "granted") {
