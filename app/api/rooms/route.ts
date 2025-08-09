@@ -16,6 +16,12 @@ export async function GET(req: NextRequest) {
             return new Response("LiveKit not configured.", { status: 500 });
         }
 
+        // Check if roomService is properly initialized
+        if (!roomService) {
+            console.error("[ROOMS_GET]: LiveKit room service not initialized");
+            return new Response("LiveKit not configured.", { status: 500 });
+        }
+
         // Assuming roomService is already imported and initialized
         const room = await roomService.listParticipants(roomName);
 
