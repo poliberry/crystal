@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+enum UserStatus {
+  ONLINE
+  IDLE
+  DND
+  INVISIBLE
+  OFFLINE
+}
+
+model Profile {
+  id         String  @id @default(uuid())
+  userId     String  @unique
+  name       String
+  globalName String?
+  imageUrl   String  @db.Text
+  email      String  @db.Text
+  customCss  String?
+
+  servers  Server[]
+  members  Member[]
+  channels Channel[]
+
+  // Conversation relations for profile-based messaging
+  conversationMembers ConversationMember[]
+  directMessages      DirectMessage[]
+
+  // Notification relations
+  notifications          Notification[]
+  triggeredNotifications Notification[] @relation("NotificationTriggeredBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  status     UserStatus  @default(OFFLINE)
+  prevStatus UserStatus?
+
+  bio            String?
+  presenceStatus String?
+  pronouns       String?
+  bannerUrl      String?
+}
+
+model Server {
+  id         String @id @default(uuid())
+  name       String
+  imageUrl   String @db.Text
+  inviteCode String @unique
+
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  members    Member[]
+  channels   Channel[]
+  categories Category[]
+
+  // Notification relation
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+}
+
+enum MemberRole {
+  ADMIN
+  MODERATOR
+  GUEST
+}
+
+model Member {
+  id   String     @id @default(uuid())
+  role MemberRole @default(GUEST)
+
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  messages       Message[]
+  directMessages DirectMessage[]
+
+  // For group conversations
+  conversationMembers ConversationMember[]
+
+  // Add the missing opposite relation field for Conversation creator
+  createdConversations Conversation[] @relation("ConversationCreator")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([serverId])
+}
+
+enum ChannelType {
+  TEXT
+  AUDIO
+  VIDEO
+}
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String
+  channels Channel[]
+  Server   Server?   @relation(fields: [serverId], references: [id])
+  serverId String?
+}
+
+model Channel {
+  id   String      @id @default(uuid())
+  name String
+  type ChannelType @default(TEXT)
+
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  // Notification relation
+  notifications Notification[]
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  Category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?
+  position   Int
+
+  @@index([profileId])
+  @@index([serverId])
+}
+
+model Attachment {
+  id   String  @id @default(uuid())
+  utId String
+  name String
+  url  String
+  size Int?
+  type String?
+
+  // Can be attached to either channel messages or direct messages
+  Message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String?
+
+  // Removed self-referential relation to avoid conflicts
+  DirectMessage   DirectMessage? @relation(fields: [directMessageId], references: [id], onDelete: Cascade)
+  directMessageId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+  @@index([directMessageId])
+}
+
+model Message {
+  id      String @id @default(uuid())
+  content String @db.Text
+
+  attachments Attachment[]
+
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  deleted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([memberId])
+  @@index([channelId])
+}
+
+enum ConversationType {
+  DIRECT_MESSAGE // 1-on-1 conversation
+  GROUP_MESSAGE // Group conversation with multiple members
+}
+
+model Conversation {
+  id   String           @id @default(uuid())
+  name String? // Optional name for group conversations
+  type ConversationType @default(DIRECT_MESSAGE)
+
+  // Creator of the conversation (especially useful for groups)
+  creatorId String?
+  creator   Member? @relation("ConversationCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  members        ConversationMember[]
+  directMessages DirectMessage[]
+
+  // Notification relation
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId])
+}
+
+model ConversationMember {
+  id String @id @default(uuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Changed from memberId to profileId for direct profile-based conversations
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Keep memberId as optional for server-context conversations
+  memberId String?
+  member   Member? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  // When the member joined the conversation
+  joinedAt DateTime @default(now())
+
+  // When the member left the conversation (null if still active)
+  leftAt DateTime?
+
+  // Last time the member read messages in this conversation
+  lastReadAt DateTime?
+
+  @@unique([conversationId, profileId])
+  @@index([conversationId])
+  @@index([profileId])
+  @@index([memberId])
+}
+
+model DirectMessage {
+  id      String @id @default(uuid())
+  content String @db.Text
+
+  // Updated to use the new Attachments relationship
+  attachments Attachment[]
+
+  // Changed to work with profiles for direct messaging
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Keep memberId as optional for server-context messages
+  memberId String?
+  member   Member? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  deleted Boolean @default(false)
+
+  // Simple reply field without self-referential relation to avoid conflicts
+  replyToId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([memberId])
+  @@index([conversationId])
+  @@index([replyToId])
+}
+
+enum NotificationType {
+  MESSAGE // New message in channel/DM/group
+  MENTION // User was mentioned
+  REPLY // Someone replied to user's message
+  FRIEND_REQUEST // Friend request received
+  CALL // Incoming call
+  SERVER_INVITE // Server invitation
+  SYSTEM // System notifications
+}
+
+model Notification {
+  id      String           @id @default(uuid())
+  type    NotificationType
+  title   String
+  content String?
+
+  // Who this notification is for
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Who triggered this notification (optional)
+  triggeredById String?
+  triggeredBy   Profile? @relation("NotificationTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  // Related entities (optional)
+  serverId String?
+  server   Server? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  messageId       String?
+  directMessageId String?
+
+  // Notification state
+  read   Boolean   @default(false)
+  readAt DateTime?
+
+  // For grouping related notifications
+  groupKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([triggeredById])
+  @@index([serverId])
+  @@index([channelId])
+  @@index([conversationId])
+  @@index([groupKey])
+}
