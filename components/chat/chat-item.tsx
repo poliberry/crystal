@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Attachment, MemberRole, type Member, type Profile } from "@prisma/client";
+import { Attachment, type Member, type Profile } from "@prisma/client";
 import axios from "axios";
 import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash } from "lucide-react";
 import Image from "next/image";
@@ -16,6 +16,8 @@ import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useModal } from "@/hooks/use-modal-store";
 import { cn } from "@/lib/utils";
+import { PermissionManager } from "@/lib/permissions";
+import { PermissionType, PermissionScope } from "@/types/permissions";
 
 import { ActionTooltip } from "../action-tooltip";
 import { UserAvatar } from "../user-avatar";
@@ -71,11 +73,55 @@ export const ChatItem = ({
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [presenceStatus, setPresenceStatus] = useState<string | null>(member.profile.presenceStatus);
+  const [permissions, setPermissions] = useState({
+    canDeleteMessage: false,
+    canEditMessage: false,
+    isAdmin: false,
+    isModerator: false
+  });
   const inputRef = useRef<ElementRef<"input">>(null);
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
   const { socket } = useSocket();
+
+  // Check permissions
+  useEffect(() => {
+    const checkPermissions = async () => {
+      const isOwner = currentMember.id === member.id;
+      
+      if (isOwner) {
+        setPermissions({
+          canDeleteMessage: !deleted,
+          canEditMessage: !deleted,
+          isAdmin: false,
+          isModerator: false
+        });
+        return;
+      }
+
+      // Check administrative permissions for non-owners
+      const [isAdmin, isModerator] = await Promise.all([
+        PermissionManager.hasPermission(currentMember.id, PermissionType.ADMINISTRATOR),
+        PermissionManager.hasPermission(currentMember.id, PermissionType.MANAGE_MESSAGES)
+      ]);
+
+      setPermissions({
+        canDeleteMessage: !deleted && (isAdmin.granted || isModerator.granted),
+        canEditMessage: false, // Only owners can edit
+        isAdmin: isAdmin.granted,
+        isModerator: isModerator.granted
+      });
+    };
+
+    checkPermissions();
+  }, [currentMember.id, member.id, deleted]);
+
+  const onMemberClick = () => {
+    if (member.id === currentMember.id) return;
+
+    router.push(`/servers/${params?.serverId}/conversations/${member.id}`);
+  };
 
   // Listen for presence status updates
   useEffect(() => {
@@ -95,12 +141,6 @@ export const ChatItem = ({
       socket.off("user:presence:update", presenceHandler);
     };
   }, [member.profile.userId, socket]);
-
-  const onMemberClick = () => {
-    if (member.id === currentMember.id) return;
-
-    router.push(`/servers/${params?.serverId}/conversations/${member.id}`);
-  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -123,13 +163,7 @@ export const ChatItem = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const isAdmin = currentMember.role === MemberRole.ADMIN;
-  const isModerator = currentMember.role === MemberRole.MODERATOR;
   const isOwner = currentMember.id === member.id;
-
-  const canDeleteMessage = !deleted && (isAdmin || isModerator || isOwner);
-  // Allow editing if owner and not deleted (even if there are attachments)
-  const canEditMessage = !deleted && isOwner;
 
   const isLoading = form.formState.isSubmitting;
 
@@ -285,9 +319,9 @@ export const ChatItem = ({
         </div>
       </div>
 
-      {canDeleteMessage && (
+      {permissions.canDeleteMessage && (
         <div className="md:hidden md:group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
-          {canEditMessage && (
+          {permissions.canEditMessage && (
             <ActionTooltip label="Edit">
               <Edit
                 onClick={() => setIsEditing((prevIsEditing) => !prevIsEditing)}

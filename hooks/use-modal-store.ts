@@ -7,6 +7,7 @@ export type ModalType =
   | "createCategory"
   | "invite"
   | "editServer"
+  | "serverSettings"
   | "members"
   | "createChannel"
   | "leaveServer"

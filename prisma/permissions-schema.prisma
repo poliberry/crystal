@@ -1,0 +1,236 @@
+-- Permission System Enhancement for Crystal Discord Clone
+-- This file contains the new permission schema additions
+
+-- Permission Types Enum
+enum PermissionType {
+  // Server permissions
+  MANAGE_SERVER
+  MANAGE_MEMBERS
+  MANAGE_ROLES
+  MANAGE_CHANNELS
+  MANAGE_CATEGORIES
+  KICK_MEMBERS
+  BAN_MEMBERS
+  TIMEOUT_MEMBERS
+  VIEW_AUDIT_LOG
+  MANAGE_WEBHOOKS
+  MANAGE_EMOJIS
+  
+  // Channel permissions
+  VIEW_CHANNEL
+  MANAGE_CHANNEL
+  SEND_MESSAGES
+  READ_MESSAGE_HISTORY
+  DELETE_MESSAGES
+  EDIT_MESSAGES
+  PIN_MESSAGES
+  MENTION_EVERYONE
+  USE_EXTERNAL_EMOJIS
+  ADD_REACTIONS
+  MANAGE_REACTIONS
+  
+  // Voice/Stage permissions
+  CONNECT
+  SPEAK
+  MUTE_MEMBERS
+  DEAFEN_MEMBERS
+  MOVE_MEMBERS
+  USE_VOICE_ACTIVITY
+  PRIORITY_SPEAKER
+  STAGE_MODERATOR
+  REQUEST_TO_SPEAK
+  
+  // Announcement permissions
+  SEND_ANNOUNCEMENTS
+  MANAGE_ANNOUNCEMENTS
+  CROSSPOST_MESSAGES
+  
+  // Special permissions
+  ADMINISTRATOR
+  VIEW_SERVER_INSIGHTS
+}
+
+-- Permission Scope Enum
+enum PermissionScope {
+  SERVER    // Server-wide permission
+  CATEGORY  // Category-specific permission
+  CHANNEL   // Channel-specific permission
+  USER      // User-specific permission override
+}
+
+-- Permission Grant Type
+enum PermissionGrantType {
+  ALLOW
+  DENY
+  INHERIT
+}
+
+-- Role model for custom roles
+model Role {
+  id          String @id @default(uuid())
+  name        String
+  color       String?
+  position    Int    @default(0)
+  hoisted     Boolean @default(false)
+  mentionable Boolean @default(false)
+  
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  
+  // Permission assignments
+  permissions RolePermission[]
+  
+  // Members with this role
+  memberRoles MemberRole[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([serverId])
+  @@index([position])
+}
+
+-- Role Permission mapping
+model RolePermission {
+  id String @id @default(uuid())
+  
+  roleId String
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  permission PermissionType
+  scope      PermissionScope
+  grant      PermissionGrantType @default(ALLOW)
+  
+  // Optional target IDs for scoped permissions
+  targetId String? // Can be channelId, categoryId, etc.
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([roleId, permission, scope, targetId])
+  @@index([roleId])
+  @@index([permission])
+}
+
+-- Member Role assignments (many-to-many)
+model MemberRole {
+  id String @id @default(uuid())
+  
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  roleId String
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  assignedAt DateTime @default(now())
+  assignedBy String? // Profile ID of who assigned this role
+  
+  @@unique([memberId, roleId])
+  @@index([memberId])
+  @@index([roleId])
+}
+
+-- User-specific permission overrides
+model UserPermission {
+  id String @id @default(uuid())
+  
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  permission PermissionType
+  scope      PermissionScope
+  grant      PermissionGrantType
+  
+  // Optional target IDs for scoped permissions
+  targetId String? // Can be channelId, categoryId, etc.
+  
+  // Metadata
+  reason     String?
+  assignedBy String  // Profile ID of who assigned this permission
+  expiresAt  DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([memberId, permission, scope, targetId])
+  @@index([memberId])
+  @@index([permission])
+}
+
+-- Channel-specific permission overrides
+model ChannelPermission {
+  id String @id @default(uuid())
+  
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  // Can be for a role or a specific member
+  roleId   String?
+  role     Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  memberId String?
+  member   Member? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  permission PermissionType
+  grant      PermissionGrantType
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([channelId, roleId, memberId, permission])
+  @@index([channelId])
+  @@index([roleId])
+  @@index([memberId])
+}
+
+-- Category-specific permission overrides
+model CategoryPermission {
+  id String @id @default(uuid())
+  
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  // Can be for a role or a specific member
+  roleId   String?
+  role     Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  memberId String?
+  member   Member? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  permission PermissionType
+  grant      PermissionGrantType
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([categoryId, roleId, memberId, permission])
+  @@index([categoryId])
+  @@index([roleId])
+  @@index([memberId])
+}
+
+-- Audit log for permission changes
+model PermissionAuditLog {
+  id String @id @default(uuid())
+  
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  
+  action     String // "ROLE_CREATED", "PERMISSION_GRANTED", etc.
+  targetType String // "ROLE", "MEMBER", "CHANNEL", etc.
+  targetId   String
+  
+  permission PermissionType?
+  oldValue   String? // JSON of old permission state
+  newValue   String? // JSON of new permission state
+  
+  performedBy String // Profile ID
+  reason      String?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([serverId])
+  @@index([targetType, targetId])
+  @@index([performedBy])
+  @@index([createdAt])
+}

@@ -13,6 +13,7 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    // Get the server with members and their role assignments
     const server = await db.server.findUnique({
       where: {
         id: params.serverId,
@@ -23,14 +24,18 @@ export async function GET(
         },
       },
       include: {
-        channels: {
-          orderBy: {
-            createdAt: "asc",
-          },
-        },
         members: {
           include: {
             profile: true,
+            memberRoles: {
+              include: {
+                role: {
+                  include: {
+                    permissions: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: {
             role: "asc",
@@ -43,7 +48,26 @@ export async function GET(
       return new NextResponse("Server not found", { status: 404 });
     }
 
-    return NextResponse.json(server);
+    // Transform the data to match the expected format
+    const membersWithRoles = server.members.map(member => ({
+      id: member.id,
+      userId: member.profileId,
+      user: {
+        id: member.profile.id,
+        name: member.profile.name,
+        imageUrl: member.profile.imageUrl,
+      },
+      roles: member.memberRoles.map(assignment => ({
+        id: assignment.role.id,
+        name: assignment.role.name,
+        color: assignment.role.color || "#99AAB5",
+        permissions: assignment.role.permissions.map(p => p.permission),
+        position: assignment.role.position,
+        memberCount: 0, // Will be calculated separately if needed
+      })),
+    }));
+
+    return NextResponse.json(membersWithRoles);
   } catch (error) {
     console.error("[SERVER_MEMBERS_GET]", error);
     return new NextResponse("Internal Error", { status: 500 });

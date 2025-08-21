@@ -1,15 +1,17 @@
 "use client";
 
-import { type ChannelType, MemberRole } from "@prisma/client";
+import { type ChannelType } from "@prisma/client";
 import { Plus, Settings } from "lucide-react";
 
 import { ActionTooltip } from "@/components/action-tooltip";
 import { useModal } from "@/hooks/use-modal-store";
 import type { ServerWithMembersWithProfiles } from "@/types";
+import { PermissionType } from "@/types/permissions";
+import { useServerPermissions } from "@/hooks/use-permissions";
 
 type ServerSectionProps = {
   label: string;
-  role?: MemberRole;
+  member?: any;
   sectionType: "channels" | "members" | "category";
   channelType?: ChannelType;
   categoryId?: string;
@@ -18,20 +20,26 @@ type ServerSectionProps = {
 
 export const ServerSection = ({
   label,
-  role,
+  member,
   sectionType,
   channelType,
   categoryId,
   server,
 }: ServerSectionProps) => {
   const { onOpen } = useModal();
+  
+  const permissions = useServerPermissions(member?.id || '');
+  
+  // Extract permission checks for easier use
+  const canManageChannels = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
+  const canManageMembers = permissions.getPermission(PermissionType.MANAGE_ROLES).granted;
   return (
     <div className="flex items-center justify-between py-2">
       <p className="text-xs uppercase font-semibold text-zinc-500 dark:text-zinc-400">
         {label}
       </p>
 
-      {role !== MemberRole.GUEST && sectionType === "category" && (
+      {canManageChannels && sectionType === "category" && (
         <ActionTooltip label="Create Channel" side="top">
           <button
             onClick={() => onOpen("createChannel", { channelType, categoryId })}
@@ -42,7 +50,7 @@ export const ServerSection = ({
         </ActionTooltip>
       )}
 
-      {role === MemberRole.ADMIN && sectionType === "members" && (
+      {canManageMembers && sectionType === "members" && (
         <ActionTooltip label="Manage Members" side="top">
           <button
             onClick={() => onOpen("members", { server })}

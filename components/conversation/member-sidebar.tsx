@@ -1,4 +1,4 @@
-import { ChannelType, MemberRole } from "@prisma/client";
+import { ChannelType } from "@prisma/client";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video } from "lucide-react";
 import { redirect } from "next/navigation";
 
@@ -7,11 +7,9 @@ import { Separator } from "@/components/ui/separator";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 
-import { ServerChannel } from "./server-channel";
-import { ServerHeader } from "./server-header";
 import { ServerMember } from "./server-member";
-import { ServerSearch } from "./conversation-search";
 import { ServerSection } from "./server-section";
+import { MemberSidebarClient } from "@/components/conversation/member-sidebar-client";
 
 type ServerSidebarProps = {
   serverId: string;
@@ -23,12 +21,25 @@ const iconMap = {
   [ChannelType.VIDEO]: <Video className="mr-2 h-4 w-4" />,
 };
 
-const roleIconMap = {
-  [MemberRole.GUEST]: null,
-  [MemberRole.MODERATOR]: (
-    <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-  ),
-  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />,
+const getRoleIcon = (member: any) => {
+  // Check if member has administrator permission
+  if (member.memberRoles?.some((mr: any) => 
+    mr.role.permissions?.some((p: any) => p.permission === 'ADMINISTRATOR' && p.grant === 'ALLOW')
+  )) {
+    return <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />;
+  }
+  
+  // Check if member has moderation permissions
+  if (member.memberRoles?.some((mr: any) => 
+    mr.role.permissions?.some((p: any) => 
+      ['MANAGE_CHANNELS', 'MANAGE_MESSAGES', 'MANAGE_ROLES'].includes(p.permission) && p.grant === 'ALLOW'
+    )
+  )) {
+    return <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />;
+  }
+  
+  // Default guest
+  return null;
 };
 
 export const MemberSidebar = async ({ serverId }: ServerSidebarProps) => {
@@ -70,9 +81,9 @@ export const MemberSidebar = async ({ serverId }: ServerSidebarProps) => {
   );
   const members = server?.members
 
-  const role = server.members.find(
+  const currentMember = server.members.find(
     (member) => member.profileId === profile.id,
-  )?.role;
+  );
 
   return (
     <div className="flex flex-col h-full text-primary w-full bg-transparent border-l border-muted">
@@ -80,7 +91,7 @@ export const MemberSidebar = async ({ serverId }: ServerSidebarProps) => {
         <ServerSection
           sectionType="members"
           server={server}
-          role={role}
+          member={currentMember}
           label="Members"
         />
       </div>
@@ -88,16 +99,11 @@ export const MemberSidebar = async ({ serverId }: ServerSidebarProps) => {
         <div className="mt-2">
           {!!members?.length && (
             <div className="mb-2">
-              <div className="space-y-[2px]">
-                {members.map((member) => (
-                  <ServerMember
-                    key={member.id}
-                    member={member}
-                    profile={profile}
-                    server={server}
-                  />
-                ))}
-              </div>
+              <MemberSidebarClient 
+                members={members} 
+                profile={profile} 
+                server={server} 
+              />
             </div>
           )}
         </div>

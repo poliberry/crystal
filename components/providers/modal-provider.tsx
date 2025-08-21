@@ -21,6 +21,7 @@ import { DMCallModal } from "../modals/dm-call-modal";
 import { CreateDirectMessageModal } from "../modals/create-direct-message-modal";
 import { CreateGroupModal } from "../modals/create-group-modal";
 import { SetStatusModal } from "../modals/set-status-modal";
+import { ServerSettingsModal } from "../modals/server-settings-modal";
 
 export const ModalProvider = () => {
   const [isMounted, setIsMounted] = useState(false);
@@ -38,6 +39,7 @@ export const ModalProvider = () => {
       <DeleteServerModal />
       <EditChannelModal />
       <EditServerModal />
+      <ServerSettingsModal />
       <InviteModal />
       <LeaveServerModal />
       <MembersModal />
