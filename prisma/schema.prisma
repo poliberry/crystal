@@ -47,6 +47,16 @@ model Profile {
   presenceStatus String?
   pronouns       String?
   bannerUrl      String?
+
+  // Friend management settings
+  allowNonFriendDMs Boolean @default(true)
+  friendRequestPrivacy String @default("everyone") // "everyone", "friends-of-friends", "none"
+
+  // Friend relations
+  sentFriendRequests     Friendship[] @relation("FriendshipRequester")
+  receivedFriendRequests Friendship[] @relation("FriendshipReceiver")
+  sentBlocks             Block[]      @relation("BlockRequester")
+  receivedBlocks         Block[]      @relation("BlockReceiver")
 }
 
 model Server {
@@ -326,4 +336,49 @@ model Notification {
   @@index([channelId])
   @@index([conversationId])
   @@index([groupKey])
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model Friendship {
+  id String @id @default(uuid())
+
+  requesterId String
+  requester   Profile @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  receiverId String
+  receiver   Profile @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  status FriendshipStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([requesterId, receiverId])
+  @@index([requesterId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model Block {
+  id String @id @default(uuid())
+
+  blockerId String
+  blocker   Profile @relation("BlockRequester", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  blockedId String
+  blocked   Profile @relation("BlockReceiver", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
 }

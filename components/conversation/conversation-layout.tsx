@@ -14,16 +14,24 @@ import { ConversationRightSidebar } from "@/components/conversation/conversation
 interface ConversationLayoutProps {
   conversation: Conversation & {
     members: Array<{
-      member: {
+      id: string;
+      conversationId: string;
+      profileId: string;
+      profile: Profile;
+      memberId?: string | null;
+      member?: {
         id: string;
         profile: Profile;
-      };
+      } | null;
+      joinedAt: Date;
+      leftAt: Date | null;
+      lastReadAt: Date | null;
     }>;
   };
   conversationName: string;
   conversationImageUrl: string;
-  otherMember: any;
-  currentMember: any;
+  otherMember: Profile | null;
+  currentConversationMember: any;
   currentProfile: Profile;
 }
 
@@ -32,7 +40,7 @@ export function ConversationLayout({
   conversationName,
   conversationImageUrl,
   otherMember,
-  currentMember,
+  currentConversationMember,
   currentProfile,
 }: ConversationLayoutProps) {
   const searchParams = useSearchParams();
@@ -78,7 +86,7 @@ export function ConversationLayout({
         conversationId={conversation.id}
         conversationName={conversationName}
         conversationType={conversation.type}
-        otherMember={otherMember?.profile}
+        otherMember={otherMember}
       />
     );
   }
@@ -97,7 +105,7 @@ export function ConversationLayout({
               name: currentProfile.globalName || currentProfile.name,
               avatar: currentProfile.imageUrl,
             }}
-            user={otherMember?.profile?.id}
+            user={otherMember?.id}
             type="conversation"
             conversation={conversation}
             currentProfile={currentProfile}
@@ -107,11 +115,11 @@ export function ConversationLayout({
             conversationId={conversation.id}
             conversationName={conversationName}
             conversationType={conversation.type}
-            otherMember={otherMember?.profile}
+            otherMember={otherMember}
           />
 
           <ChatMessages
-            member={currentMember}
+            member={currentConversationMember}
             name={conversationName}
             chatId={conversation.id}
             type="conversation"
@@ -155,7 +163,7 @@ export function ConversationLayout({
             name: currentProfile.globalName || currentProfile.name,
             avatar: currentProfile.imageUrl,
           }}
-          user={otherMember?.profile?.id}
+          user={otherMember?.id}
           type="conversation"
           conversation={conversation}
           currentProfile={currentProfile}
@@ -177,12 +185,12 @@ export function ConversationLayout({
             conversationId={conversation.id}
             conversationName={conversationName}
             conversationType={conversation.type}
-            otherMember={otherMember?.profile}
+            otherMember={otherMember}
           />
         )}
 
         <ChatMessages
-          member={currentMember}
+          member={currentConversationMember}
           name={conversationName}
           chatId={conversation.id}
           type="conversation"

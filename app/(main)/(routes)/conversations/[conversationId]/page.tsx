@@ -22,28 +22,17 @@ type ConversationPageProps = {
 
 const ConversationPage = async ({ params, searchParams }: ConversationPageProps) => {
   const profile = await currentProfile();
+  const { conversationId } = await params;
 
   if (!profile) return redirectToSignIn();
-
-  // Find the current member (we need to get their member record)
-  const currentMember = await db.member.findFirst({
-    where: {
-      profileId: profile.id,
-    },
-    include: {
-      profile: true,
-    },
-  });
-
-  if (!currentMember) redirect("/");
 
   // Get the conversation and verify the user is a member
   const conversation = await db.conversation.findFirst({
     where: {
-      id: params.conversationId,
+      id: conversationId,
       members: {
         some: {
-          memberId: currentMember.id,
+          profileId: profile.id,
           leftAt: null, // Only active members
         },
       },
@@ -54,6 +43,7 @@ const ConversationPage = async ({ params, searchParams }: ConversationPageProps)
           leftAt: null,
         },
         include: {
+          profile: true,
           member: {
             include: {
               profile: true,
@@ -71,6 +61,13 @@ const ConversationPage = async ({ params, searchParams }: ConversationPageProps)
 
   if (!conversation) redirect("/");
 
+  // Find the current user's conversation member record
+  const currentConversationMember = conversation.members.find(
+    (member) => member.profileId === profile.id
+  );
+
+  if (!currentConversationMember) redirect("/");
+
   // Determine conversation display info
   let conversationName: string;
   let conversationImageUrl: string;
@@ -79,14 +76,14 @@ const ConversationPage = async ({ params, searchParams }: ConversationPageProps)
   if (conversation.type === ConversationType.DIRECT_MESSAGE) {
     // For direct messages, find the other member
     const otherConversationMember = conversation.members.find(
-      (member) => member.memberId !== currentMember.id
+      (member) => member.profileId !== profile.id
     );
     
     if (!otherConversationMember) redirect("/");
     
-    otherMember = otherConversationMember.member;
-    conversationName = otherMember.profile.name;
-    conversationImageUrl = otherMember.profile.imageUrl;
+    otherMember = otherConversationMember.profile;
+    conversationName = otherMember?.name as string;
+    conversationImageUrl = otherMember?.imageUrl as string;
   } else {
     // For group messages
     conversationName = conversation.name || "Group Chat";
@@ -118,7 +115,7 @@ const ConversationPage = async ({ params, searchParams }: ConversationPageProps)
             conversationName={conversationName}
             conversationImageUrl={conversationImageUrl}
             otherMember={otherMember}
-            currentMember={currentMember}
+            currentConversationMember={currentConversationMember}
             currentProfile={profile}
           />
         </div>

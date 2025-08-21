@@ -5,6 +5,10 @@ import { useSocket } from "@/components/providers/socket-provider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ServerChannelList } from "./server-channel-list";
 import { ConversationHeader } from "./conversation-header";
+import { ActionTooltip } from "../action-tooltip";
+import { Button } from "../ui/button";
+import { MessageCircle, Users } from "lucide-react";
+import { useModal } from "@/hooks/use-modal-store";
 
 interface ConversationSidebarClientProps {
   initialConversations: any[];
@@ -16,19 +20,20 @@ export const ConversationSidebarClient = ({
   currentProfile,
 }: ConversationSidebarClientProps) => {
   const { socket } = useSocket();
+  const { onOpen } = useModal();
   const [conversations, setConversations] = useState(initialConversations);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchConversations = async () => {
     try {
       setIsRefreshing(true);
-      const response = await fetch('/api/conversations/list');
+      const response = await fetch("/api/conversations/list");
       if (response.ok) {
         const data = await response.json();
         setConversations(data.conversations || []);
       }
     } catch (error) {
-      console.error('Error refreshing conversations:', error);
+      console.error("Error refreshing conversations:", error);
     } finally {
       setIsRefreshing(false);
     }
@@ -38,7 +43,7 @@ export const ConversationSidebarClient = ({
     if (!socket) return;
 
     const handleConversationsRefresh = () => {
-      console.log('Received conversations refresh event');
+      console.log("Received conversations refresh event");
       fetchConversations();
     };
 
@@ -54,6 +59,33 @@ export const ConversationSidebarClient = ({
       <ConversationHeader currentProfile={currentProfile} />
       <ScrollArea className="flex-1 px-3 dark:bg-black bg-white">
         <div className="mt-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-muted-foreground">DIRECT MESSAGES</h4>
+            <div className="flex items-center gap-x-1">
+              <ActionTooltip label="Create Group">
+                <Button
+                  onClick={() => onOpen("createGroup", { currentProfile })}
+                  variant="ghost"
+                  size="sm"
+                  className="p-2"
+                >
+                  <Users className="w-4 h-4" />
+                </Button>
+              </ActionTooltip>
+              <ActionTooltip label="Start DM">
+                <Button
+                  onClick={() =>
+                    onOpen("createDirectMessage", { currentProfile })
+                  }
+                  variant="ghost"
+                  size="sm"
+                  className="p-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </Button>
+              </ActionTooltip>
+            </div>
+          </div>
           <div className="mb-2">
             <ServerChannelList
               conversations={conversations}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
+import { canSendDirectMessage } from "@/lib/friend-permissions";
 
 export async function POST(req: Request) {
   try {
@@ -36,6 +37,12 @@ export async function POST(req: Request) {
 
     if (!otherProfile) {
       return new NextResponse("Target user not found", { status: 404 });
+    }
+
+    // Check if DM is allowed based on friend settings
+    const dmPermission = await canSendDirectMessage(profile.id, otherProfileId);
+    if (!dmPermission.allowed) {
+      return new NextResponse(dmPermission.reason || "Cannot send direct message", { status: 403 });
     }
 
     // Check if a conversation already exists between these profiles

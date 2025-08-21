@@ -13,7 +13,7 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { conversationId } = params;
+    const { conversationId } = await params;
 
     if (!conversationId) {
       return new NextResponse("Conversation ID missing", { status: 400 });
@@ -25,15 +25,18 @@ export async function GET(
         id: conversationId,
         members: {
           some: {
-            member: {
-              profileId: profile.id,
-            },
+            profileId: profile.id,
+            leftAt: null,
           },
         },
       },
       include: {
         members: {
+          where: {
+            leftAt: null,
+          },
           include: {
+            profile: true,
             member: {
               include: {
                 profile: true,
@@ -54,21 +57,29 @@ export async function GET(
       type: conversation.type,
       name: conversation.name,
       members: conversation.members.map((conversationMember) => ({
-        member: {
-          id: conversationMember.member.id,
-          profile: {
-            id: conversationMember.member.profile.id,
-            name: conversationMember.member.profile.name,
-            globalName: conversationMember.member.profile.globalName,
-            imageUrl: conversationMember.member.profile.imageUrl,
-            email: conversationMember.member.profile.email,
-            bio: conversationMember.member.profile.bio,
-            pronouns: conversationMember.member.profile.pronouns,
-            status: conversationMember.member.profile.status,
-            createdAt: conversationMember.member.profile.createdAt,
-            updatedAt: conversationMember.member.profile.updatedAt,
-          },
+        id: conversationMember.id,
+        conversationId: conversationMember.conversationId,
+        profileId: conversationMember.profileId,
+        profile: {
+          id: conversationMember.profile.id,
+          userId: conversationMember.profile.userId,
+          name: conversationMember.profile.name,
+          globalName: conversationMember.profile.globalName,
+          imageUrl: conversationMember.profile.imageUrl,
+          email: conversationMember.profile.email,
+          bio: conversationMember.profile.bio,
+          pronouns: conversationMember.profile.pronouns,
+          status: conversationMember.profile.status,
+          createdAt: conversationMember.profile.createdAt,
+          updatedAt: conversationMember.profile.updatedAt,
+          customCss: conversationMember.profile.customCss,
+          allowNonFriendDMs: conversationMember.profile.allowNonFriendDMs,
+          friendRequestPrivacy: conversationMember.profile.friendRequestPrivacy,
         },
+        memberId: conversationMember.memberId,
+        joinedAt: conversationMember.joinedAt,
+        leftAt: conversationMember.leftAt,
+        lastReadAt: conversationMember.lastReadAt,
       })),
     };
 

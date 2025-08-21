@@ -6,39 +6,39 @@ import { db } from "@/lib/db";
 export async function POST(req: Request) {
   try {
     const profile = await currentProfile();
-    const { memberOneId, memberTwoId } = await req.json();
+    const { profileOneId, profileTwoId } = await req.json();
 
-    console.log("Creating DM API called with:", { memberOneId, memberTwoId });
+    console.log("Creating DM API called with:", { profileOneId, profileTwoId });
 
     if (!profile) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    if (!memberOneId || !memberTwoId) {
-      return new NextResponse("Member IDs are required", { status: 400 });
+    if (!profileOneId || !profileTwoId) {
+      return new NextResponse("Profile IDs are required", { status: 400 });
     }
 
-    if (memberOneId === memberTwoId) {
+    if (profileOneId === profileTwoId) {
       return new NextResponse("Cannot create conversation with yourself", { status: 400 });
     }
 
-    // Verify both members exist
-    const [memberOne, memberTwo] = await Promise.all([
-      db.member.findUnique({ where: { id: memberOneId } }),
-      db.member.findUnique({ where: { id: memberTwoId } })
+    // Verify both profiles exist
+    const [profileOne, profileTwo] = await Promise.all([
+      db.profile.findUnique({ where: { id: profileOneId } }),
+      db.profile.findUnique({ where: { id: profileTwoId } })
     ]);
 
-    if (!memberOne) {
-      return new NextResponse("Member one not found", { status: 404 });
+    if (!profileOne) {
+      return new NextResponse("Profile one not found", { status: 404 });
     }
 
-    if (!memberTwo) {
-      return new NextResponse("Member two not found", { status: 404 });
+    if (!profileTwo) {
+      return new NextResponse("Profile two not found", { status: 404 });
     }
 
-    console.log("Both members found, creating conversation...");
+    console.log("Both profiles found, creating conversation...");
 
-    const conversation = await getOrCreateConversation(memberOneId, memberTwoId);
+    const conversation = await getOrCreateConversation(profileOneId, profileTwoId);
 
     if (!conversation) {
       return new NextResponse("Failed to create conversation", { status: 500 });
