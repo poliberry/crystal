@@ -6,6 +6,8 @@ import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ChatMessages } from "@/components/chat/chat-messages";
 import { MediaRoom } from "@/components/media-room";
+import { StageRoom } from "@/components/stage-room";
+import { AnnouncementChannel } from "@/components/announcement-channel";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 import { FloatingCallCard } from "@/components/call-ui";
@@ -42,8 +44,10 @@ export async function generateMetadata({
     },
   });
 
+  const channelPrefix = channel?.type !== ChannelType.AUDIO && (channel?.type as any) !== "STAGE" ? "#" : "";
+
   return {
-    title: `${channel?.type !== ChannelType.AUDIO ? "#" : ""}${channel?.name} | ${server?.name} | Crystal`,
+    title: `${channelPrefix}${channel?.name} | ${server?.name} | Crystal`,
     description: `Chat in ${channel?.name} on ${server?.name}`,
   };
 }
@@ -129,6 +133,41 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
           <>
             <MediaRoom channel={channel} server={server} />
           </>
+        )}
+
+        {(channel.type as any) === "STAGE" && (
+          <>
+            <StageRoom
+              channel={channel}
+              server={server}
+              member={member}
+              chatId={channel.id}
+              apiUrl="/api/messages"
+              socketUrl="/api/socket/messages"
+              socketQuery={{
+                channelId: channel.id,
+                serverId: channel.serverId,
+              }}
+              paramKey="channelId"
+              paramValue={channel.id}
+            />
+          </>
+        )}
+
+        {(channel.type as any) === "ANNOUNCEMENT" && (
+          <AnnouncementChannel
+            channel={channel}
+            member={member}
+            chatId={channel.id}
+            apiUrl="/api/messages"
+            socketUrl="/api/socket/messages"
+            socketQuery={{
+              channelId: channel.id,
+              serverId: channel.serverId,
+            }}
+            paramKey="channelId"
+            paramValue={channel.id}
+          />
         )}
       </div>
     </PageContextProvider>

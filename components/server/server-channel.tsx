@@ -12,10 +12,11 @@ import {
   Trash,
   Video,
   GripVertical,
+  Radio,
+  Volume2,
+  Megaphone,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import { ActionTooltip } from "@/components/action-tooltip";
 import { type ModalType, useModal } from "@/hooks/use-modal-store";
@@ -53,6 +54,8 @@ const iconMap = {
   [ChannelType.TEXT]: Hash,
   [ChannelType.AUDIO]: Mic,
   [ChannelType.VIDEO]: Video,
+  [ChannelType.STAGE]: Radio,
+  [ChannelType.ANNOUNCEMENT]: Megaphone,
 };
 
 export const ServerChannel = ({
@@ -75,7 +78,7 @@ export const ServerChannel = ({
   };
 
   useEffect(() => {
-    if (channel.type === ChannelType.AUDIO) {
+    if (channel.type === ChannelType.AUDIO || (channel.type as any) === "STAGE") {
       getConnectedUsers();
     }
 
@@ -86,20 +89,10 @@ export const ServerChannel = ({
     });
   }, [channel.id, channel.type]);
 
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({
-      id: channel.id,
-    });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const Icon = iconMap[channel.type];
+  const Icon = iconMap[channel.type as keyof typeof iconMap];
 
   const onClick = async () => {
-    if (channel.type === ChannelType.AUDIO) {
+    if (channel.type === ChannelType.AUDIO || (channel.type as any) === "STAGE") {
       if (!media.connected) {
         media?.join(
           channel.id,
@@ -108,7 +101,27 @@ export const ServerChannel = ({
           server.id,
           "channel",
           true,
-          false
+          false // Always false for audio and stage channels
+        );
+        router.push(`/servers/${params?.serverId}/channels/${channel.id}`);
+      } else if (media.connected && media.roomName !== channel.name) {
+        onOpen("switchVoiceChannel", {
+          channel,
+          server,
+        });
+      } else {
+        router.push(`/servers/${params?.serverId}/channels/${channel.id}`);
+      }
+    } else if (channel.type === ChannelType.VIDEO) {
+      if (!media.connected) {
+        media?.join(
+          channel.id,
+          channel.name,
+          server.name,
+          server.id,
+          "channel",
+          true,
+          true // Video enabled for video channels
         );
         router.push(`/servers/${params?.serverId}/channels/${channel.id}`);
       } else if (media.connected && media.roomName !== channel.name) {
@@ -133,9 +146,6 @@ export const ServerChannel = ({
     <ContextMenu>
       <ContextMenuTrigger>
         <div
-          ref={setNodeRef}
-          style={style}
-          {...attributes}
           onClick={onClick}
           className="flex flex-col items-start gap-1"
         >
@@ -146,18 +156,6 @@ export const ServerChannel = ({
                 "bg-zinc-700/20 dark:bg-zinc-700"
             )}
           >
-            {/* Drag handle */}
-            {role !== MemberRole.GUEST && (
-              <span
-              {...listeners}
-              onClick={(e) => e.stopPropagation()} // Prevent drag handle click from navigating
-              className="cursor-grab group-hover:block hidden active:cursor-grabbing mr-0.5"
-              tabIndex={1}
-              aria-label="Drag to reorder"
-            >
-              <GripVertical className="w-3 h-3 text-zinc-400 opacity-0 group-hover:opacity-100" />
-            </span>
-            )}
             {channel.type === ChannelType.TEXT && (
               <UnreadDot channelId={channel.id} />
             )}
@@ -177,10 +175,10 @@ export const ServerChannel = ({
                 </div>
               </div>
               {media.connected &&
-                channel.type === ChannelType.AUDIO &&
+                (channel.type === ChannelType.AUDIO || (channel.type as any) === "STAGE") &&
                 media.roomName === channel.name && <ConnectedUsers />}
               {media.connected &&
-                channel.type === ChannelType.AUDIO &&
+                (channel.type === ChannelType.AUDIO || (channel.type as any) === "STAGE") &&
                 media.roomName !== channel.name &&
                 users.length > 0 && (
                   <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground px-2 pb-2">
@@ -205,7 +203,7 @@ export const ServerChannel = ({
                   </div>
                 )}
               {!media.connected &&
-                channel.type === ChannelType.AUDIO &&
+                (channel.type === ChannelType.AUDIO || (channel.type as any) === "STAGE") &&
                 users.length > 0 && (
                   <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground px-2 pb-2">
                     {users.map((user) => {

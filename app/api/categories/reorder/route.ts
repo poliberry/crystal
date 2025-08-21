@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest) {
     if (!items || !Array.isArray(items))
       return new NextResponse("Items array is missing.", { status: 400 });
 
-    // Check if user has permission to reorder channels
+    // Check if user has permission to reorder categories
     const server = await db.server.findFirst({
       where: {
         id: serverId,
@@ -38,18 +38,11 @@ export async function PATCH(req: NextRequest) {
 
     if (!server) return new NextResponse("Server not found.", { status: 404 });
 
-    // Update channel positions and categories
-    const updatePromises = items.map((item: { 
-      id: string; 
-      position: number; 
-      categoryId?: string | null;
-    }) =>
-      db.channel.update({
+    // Update category positions
+    const updatePromises = items.map((item: { id: string; position: number }) =>
+      db.category.update({
         where: { id: item.id },
-        data: { 
-          position: item.position,
-          categoryId: item.categoryId,
-        },
+        data: { position: item.position },
       })
     );
 
@@ -57,7 +50,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    console.error("[CHANNELS_REORDER_PATCH]: ", error);
+    console.error("[CATEGORIES_REORDER_PATCH]: ", error);
     return new NextResponse("Internal Server Error.", { status: 500 });
   }
 }

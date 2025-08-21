@@ -117,11 +117,14 @@ enum ChannelType {
   TEXT
   AUDIO
   VIDEO
+  STAGE
+  ANNOUNCEMENT
 }
 
 model Category {
   id       String    @id @default(uuid())
   name     String
+  position Int       @default(0)
   channels Channel[]
   Server   Server?   @relation(fields: [serverId], references: [id])
   serverId String?

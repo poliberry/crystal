@@ -1,5 +1,5 @@
 import { ChannelType, MemberRole } from "@prisma/client";
-import { Hash, Mic, ShieldAlert, ShieldCheck, Video } from "lucide-react";
+import { Hash, Mic, ShieldAlert, ShieldCheck, Video, Radio, Megaphone } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +21,8 @@ const iconMap = {
   [ChannelType.TEXT]: <Hash className="mr-2 h-4 w-4" />,
   [ChannelType.AUDIO]: <Mic className="mr-2 h-4 w-4" />,
   [ChannelType.VIDEO]: <Video className="mr-2 h-4 w-4" />,
+  [ChannelType.STAGE]: <Radio className="mr-2 h-4 w-4" />,
+  [ChannelType.ANNOUNCEMENT]: <Megaphone className="mr-2 h-4 w-4" />,
 };
 
 const roleIconMap = {
@@ -61,6 +63,9 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
               position: "asc",
             },
           },
+        },
+        orderBy: {
+          position: "asc",
         },
       },
     },
