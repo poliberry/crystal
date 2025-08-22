@@ -1,7 +1,7 @@
 <a name="readme-top"></a>
 
 # Private. Secure. Open source. Its the new way to chat online.
-![Something big is coming.](/.github/images/img_main.png "Crystal - Private. Secure. Open source. Its the new way to chat online.")
+![Something big is coming.](https://pbs.twimg.com/profile_banners/1952283485856829440/1755849777/1500x500 "Crystal - Private. Secure. Open source. Its the new way to chat online.")
 
 [![GitHub license](https://flat.badgen.net/github/license/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/blob/main/LICENSE "GitHub license")
 [![Maintenance](https://flat.badgen.net/static/Maintained/yes?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/commits/main "Maintenance")
