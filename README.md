@@ -9,6 +9,7 @@
 [![Github commits](https://flat.badgen.net/github/commits/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/commits "Github commits")
 [![GitHub issues](https://flat.badgen.net/github/issues/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/issues "GitHub issues")
 [![GitHub pull requests](https://flat.badgen.net/github/prs/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/pulls "GitHub pull requests")
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/endrtech/crystal?utm_source=oss&utm_medium=github&utm_campaign=endrtech%2Fcrystal&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 # ❓ What is Crystal?
 
