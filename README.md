@@ -13,6 +13,8 @@
 
 # ❓ What is Crystal?
 
+> Crystal is currently in the development phase, and is not a public product. This repository has been made open source prior to launch, as a way for other developers to come up with new ideas for their own projects, or contribute and help with the development of Crystal.
+
 Crystal is a completely private and open source chat platform, designed using existing technologies like LiveKit for audio/video calling and stage channels, and Socket.IO for message and event handling.
 Crystal is designed with security in mind, meaning Crystal will have soon to be developed technology such as:
 
