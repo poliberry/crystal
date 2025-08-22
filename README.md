@@ -10,11 +10,6 @@
 [![GitHub issues](https://flat.badgen.net/github/issues/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/issues "GitHub issues")
 [![GitHub pull requests](https://flat.badgen.net/github/prs/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/pulls "GitHub pull requests")
 
-<!-- Table of Contents -->
-<details>
-
-<summary>
-
 # ❓ What is Crystal?
 
 Crystal is a completely private and open source chat platform, designed using existing technologies like LiveKit for audio/video calling and stage channels, and Socket.IO for message and event handling.
@@ -23,10 +18,6 @@ Crystal is designed with security in mind, meaning Crystal will have soon to be 
 - Tigress, our open source text moderation engine, utilising existing LLM models to efficiently digest, rank and take action against inappropriate text conversations
 - Flora, our open source image moderation system, using AI to detect inappropriate content in images, and advise of the best course of action
 - Falkon, a open source user and case management system used by ENDR to log and track user accounts and opened cases (either by Tigress, Flora, or our Trust & Saftey team), to analyse patterns in conversations sent in channels and conversations, and plan preventative mesaures such as IP-ban evading.
-
-</summary>
-
-</details>
 
 <br />
 
