@@ -127,16 +127,9 @@ NEXT_PUBLIC_LIVEKIT_URL=wss://discord-clone-xxxxxxxxxx.livekit.cloud
 
 ## :raised_hands: Contribute
 
-To contribute to Crystal, follow the below steps:
-- Please first **fork this repository**, and ensure your fork **stays synced** to the main repository, to ensure you receive new commits from the ENDR team.
-- Next, create an issue on the [Issues](https://github.com/endr-tech/crystal/issues) tab.
-- Ensure your issue describes what problems are being faced within the application, what steps can be taken to reproduce, and any screenshots.
-- For improvements to the system, follow the above steps, instead explaining what you would like to add to the platform, and what changes will be made to achieve it.
-- Once your issue has been created, the ENDR team monitors all active issues on this repository, and is then recorded in our JIRA environment, where we can keep a log of changes.
-- Tippy-tap on your keyboard, produce the new feature/fix for a bug, and commit it to your **forked repository**.
-- Once done, create a PR on this repository from your fork, using the steps outlined in this [GitHub article](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork).
+To contribute to Crystal, check out the [Contributing section](https://github.com/endr-tech/crystal/blob/CONTRIBUTING.md) on how to contribute to the project.
 
-If you have any questions, please reach out on the ENDR Developer Hub Discord server, or on our Crystal server (also named the same thing).
+If you have any questions, please reach out on the ENDR Developer Hub Discord server, on the Crystal Discord server, or in our official servers on this very platform, Crystal!
 
 
 ## :gem: Acknowledgements
