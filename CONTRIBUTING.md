@@ -1,6 +1,6 @@
 <!-- omit in toc -->
 
-# Contributing to Discord Clone
+# Contributing to Crystal
 
 First off, thanks for taking the time to contribute! ❤️
 
