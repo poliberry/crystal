@@ -1,146 +1,32 @@
 <a name="readme-top"></a>
 
-# Discord Clone - Real-time chat, voice, and community features in a modern, scalable Next.js 14-powered platform.
+# Private. Secure. Open source. Its the new way to chat online.
+![Something big is coming.](/.github/images/img_main.png "Crystal - Private. Secure. Open source. Its the new way to chat online.")
 
-![Discord Clone - Real-time chat, voice, and community features in a modern, scalable Next.js 14-powered platform.](/.github/images/img_main.png "Discord Clone - Real-time chat, voice, and community features in a modern, scalable Next.js 14-powered platform.")
-
-[![Ask Me Anything!](https://flat.badgen.net/static/Ask%20me/anything?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy "Ask Me Anything!")
-[![GitHub license](https://flat.badgen.net/github/license/sanidhyy/discord-clone?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy/discord-clone/blob/main/LICENSE "GitHub license")
-[![Maintenance](https://flat.badgen.net/static/Maintained/yes?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy/discord-clone/commits/main "Maintenance")
-[![GitHub branches](https://flat.badgen.net/github/branches/sanidhyy/discord-clone?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy/discord-clone/branches "GitHub branches")
-[![Github commits](https://flat.badgen.net/github/commits/sanidhyy/discord-clone?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy/discord-clone/commits "Github commits")
-[![GitHub issues](https://flat.badgen.net/github/issues/sanidhyy/discord-clone?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy/discord-clone/issues "GitHub issues")
-[![GitHub pull requests](https://flat.badgen.net/github/prs/sanidhyy/discord-clone?icon=github&color=black&scale=1.01)](https://github.com/sanidhyy/discord-clone/pulls "GitHub pull requests")
+[![GitHub license](https://flat.badgen.net/github/license/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/blob/main/LICENSE "GitHub license")
+[![Maintenance](https://flat.badgen.net/static/Maintained/yes?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/commits/main "Maintenance")
+[![GitHub branches](https://flat.badgen.net/github/branches/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/branches "GitHub branches")
+[![Github commits](https://flat.badgen.net/github/commits/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/commits "Github commits")
+[![GitHub issues](https://flat.badgen.net/github/issues/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/issues "GitHub issues")
+[![GitHub pull requests](https://flat.badgen.net/github/prs/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/pulls "GitHub pull requests")
 
 <!-- Table of Contents -->
 <details>
 
 <summary>
 
-# :notebook_with_decorative_cover: Table of Contents
+# ❓ What is Crystal?
+
+Crystal is a completely private and open source chat platform, designed using existing technologies like LiveKit for audio/video calling and stage channels, and Socket.IO for message and event handling.
+Crystal is designed with security in mind, meaning Crystal will have soon to be developed technology such as:
+
+- Tigress, our open source text moderation engine, utilising existing LLM models to efficiently digest, rank and take action against inappropriate text conversations
+- Flora, our open source image moderation system, using AI to detect inappropriate content in images, and advise of the best course of action
+- Falkon, a open source user and case management system used by ENDR to log and track user accounts and opened cases (either by Tigress, Flora, or our Trust & Saftey team), to analyse patterns in conversations sent in channels and conversations, and plan preventative mesaures such as IP-ban evading.
 
 </summary>
 
-- [Folder Structure](#bangbang-folder-structure)
-- [Getting Started](#toolbox-getting-started)
-- [Screenshots](#camera-screenshots)
-- [Tech Stack](#gear-tech-stack)
-- [Stats](#wrench-stats)
-- [Contribute](#raised_hands-contribute)
-- [Acknowledgements](#gem-acknowledgements)
-- [Buy Me a Coffee](#coffee-buy-me-a-coffee)
-- [Follow Me](#rocket-follow-me)
-- [Learn More](#books-learn-more)
-- [Deploy on Vercel](#page_with_curl-deploy-on-vercel)
-- [Deploy on Railway](#page_with_curl-deploy-on-railway)
-- [Give A Star](#star-give-a-star)
-- [Star History](#star2-star-history)
-- [Give A Star](#star-give-a-star)
-
 </details>
-
-## :bangbang: Folder Structure
-
-Here is the folder structure of this app.
-
-```bash
-discord-clone/
-  |- actions/
-    |- challenge-progress.ts
-    |- user-progress.ts
-    |- user-subscription.ts
-  |- app/
-    |-- (auth)/
-        |--- (routes)/
-            |---- account/
-            |---- sign-in/
-            |---- sign-up/
-        |--- layout.tsx
-    |-- (invite)/(routes)/invite/[inviteCode]/
-    |-- (main)/
-        |--- (routes)/servers/[serverId]/
-            |---- channels/[channelId]/
-            |---- conversations/[memberId]/
-            |---- layout.tsx
-            |---- page.tsx
-        |--- layout.tsx
-    |-- (setup)/
-        |--- page.tsx
-    |-- api/
-        |--- channels/
-        |--- direct-messages/
-        |--- livekit/
-        |--- members/
-        |--- messages/
-        |--- servers/
-        |--- uploadthing/
-    |-- apple-icon.png
-    |-- error.tsx
-    |-- favicon.ico
-    |-- globals.css
-    |-- icon1.png
-    |-- icon2.png
-    |-- layout.tsx
-    |-- loading.tsx
-    |-- not-found.tsx
-  |- components/
-    |-- chat/
-    |-- clerk/
-    |-- modals/
-    |-- navigation/
-    |-- providers/
-    |-- server/
-    |-- ui/
-    |-- action-tooltip.tsx
-    |-- emoji-picker.tsx
-    |-- file-upload.tsx
-    |-- media-room.tsx
-    |-- mobile-toggle.tsx
-    |-- mode-toggle.tsx
-    |-- socket-indicator.tsx
-    |-- user-avatar.tsx
-  |- config/
-    |-- index.ts
-  |- hooks/
-    |-- use-chat-query.ts
-    |-- use-chat-scroll.ts
-    |-- use-chat-socket.ts
-    |-- use-modal-store.ts
-    |-- use-origin.ts
-  |- lib/
-    |-- conversation.ts
-    |-- current-profile-page.ts
-    |-- current-profile.ts
-    |-- db.ts
-    |-- initial-profile.ts
-    |-- uploadthing.ts
-    |-- utils.ts
-  |- pages/api/socket/
-    |-- direct-messages/
-    |-- messages/
-    |-- io.ts
-  |- prisma/
-    |-- schema.prisma
-  |- public/
-    |-- github.png
-    |-- logo.png
-  |- .env
-  |- .env.example
-  |- .eslintrc.js
-  |- .gitignore
-  |- .prettierrc.json
-  |- components.json
-  |- constants.ts
-  |- drizzle.config.ts
-  |- environment.d.ts
-  |- middleware.ts
-  |- next.config.mjs
-  |- package-lock.json
-  |- package.json
-  |- postcss.config.js
-  |- tailwind.config.ts
-  |- tsconfig.json
-```
 
 <br />
 
@@ -239,29 +125,23 @@ NEXT_PUBLIC_LIVEKIT_URL=wss://discord-clone-xxxxxxxxxx.livekit.cloud
 
 **NOTE:** Please make sure to keep your API keys and configuration values secure and do not expose them publicly.
 
-## :camera: Screenshots
-
-![Modern UI/UX](/.github/images/img1.png "Modern UI/UX")
-
-![Video Conferencing](/.github/images/img2.png "Video Conferencing")
-
-![One-on-one Chat](/.github/images/img3.png "One-on-one Chat")
-
-## :gear: Tech Stack
-
-[![React JS](https://skillicons.dev/icons?i=react "React JS")](https://react.dev/ "React JS") [![Next JS](https://skillicons.dev/icons?i=next "Next JS")](https://nextjs.org/ "Next JS") [![Typescript](https://skillicons.dev/icons?i=ts "Typescript")](https://www.typescriptlang.org/ "Typescript") [![Tailwind CSS](https://skillicons.dev/icons?i=tailwind "Tailwind CSS")](https://tailwindcss.com/ "Tailwind CSS") [![Vercel](https://skillicons.dev/icons?i=vercel "Vercel")](https://vercel.app/ "Vercel") [![Postgresql](https://skillicons.dev/icons?i=postgres "Postgresql")](https://www.postgresql.org/ "Postgresql")
-
-## :wrench: Stats
-
-[![Stats for Discord Clone](/.github/images/stats.svg "Stats for Discord Clone")](https://pagespeed.web.dev/analysis?url=https://discord-clone-production-e781.up.railway.app/ "Stats for Discord Clone")
-
 ## :raised_hands: Contribute
 
-You might encounter some bugs while using this app. You are more than welcome to contribute. Just submit changes via pull request and I will review them before merging. Make sure you follow community guidelines.
+To contribute to Crystal, follow the below steps:
+- Please first **fork this repository**, and ensure your fork **stays synced** to the main repository, to ensure you receive new commits from the ENDR team.
+- Next, create an issue on the [Issues](https://github.com/endr-tech/crystal/issues) tab.
+- Ensure your issue describes what problems are being faced within the application, what steps can be taken to reproduce, and any screenshots.
+- For improvements to the system, follow the above steps, instead explaining what you would like to add to the platform, and what changes will be made to achieve it.
+- Once your issue has been created, the ENDR team monitors all active issues on this repository, and is then recorded in our JIRA environment, where we can keep a log of changes.
+- Tippy-tap on your keyboard, produce the new feature/fix for a bug, and commit it to your **forked repository**.
+- Once done, create a PR on this repository from your fork, using the steps outlined in this [GitHub article](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork).
+
+If you have any questions, please reach out on the ENDR Developer Hub Discord server, or on our Crystal server (also named the same thing).
+
 
 ## :gem: Acknowledgements
 
-Useful resources and dependencies that are used in Discord Clone.
+Useful resources and dependencies that are used in Crystal.
 
 - Thanks to CodeWithAntonio: https://codewithantonio.com/
 - [@clerk/nextjs](https://www.npmjs.com/package/@clerk/nextjs): ^4.29.9
@@ -318,16 +198,6 @@ Useful resources and dependencies that are used in Discord Clone.
 - [tailwindcss](https://www.npmjs.com/package/tailwindcss): ^3.3.0
 - [typescript](https://www.npmjs.com/package/typescript): ^5
 
-## :coffee: Buy Me a Coffee
-
-[<img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" width="200" />](https://www.buymeacoffee.com/sanidhy "Buy me a Coffee")
-
-## :rocket: Follow Me
-
-[![Follow Me](https://img.shields.io/github/followers/sanidhyy?style=social&label=Follow&maxAge=2592000)](https://github.com/sanidhyy "Follow Me")
-[![Tweet about this project](https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Ftwitter.com%2FTechnicalShubam)](https://twitter.com/intent/tweet?text=Check+out+this+amazing+app:&url=https%3A%2F%2Fgithub.com%2Fsanidhyy%2Fdiscord-clone "Tweet about this project")
-[![Subscribe to my YouTube Channel](https://img.shields.io/youtube/channel/subscribers/UCNAz_hUVBG2ZUN8TVm0bmYw)](https://www.youtube.com/@OPGAMER./?sub_confirmation=1 "Subscribe to my YouTube Channel")
-
 ## :books: Learn More
 
 To learn more about Next.js, take a look at the following resources:
@@ -382,11 +252,11 @@ You can also give this repository a star to show more people and they can use th
 
 ## :star2: Star History
 
-<a href="https://star-history.com/#sanidhyy/discord-clone&Timeline">
+<a href="https://star-history.com/#endr-tech/crystal&Timeline">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=sanidhyy/discord-clone&type=Timeline&theme=dark" />
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=sanidhyy/discord-clone&type=Timeline" />
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=sanidhyy/discord-clone&type=Timeline" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=endr-tech/crystal&type=Timeline&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=endr-tech/crystal&type=Timeline" />
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=endr-tech/crystal&type=Timeline" />
 </picture>
 </a>
 
