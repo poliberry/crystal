@@ -45,7 +45,7 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
 
 # neon databse url
-DATABASE_URL="postgresql://<user>:<password>@<host>:<post>/discord-clone?sslmode=require"
+DATABASE_URL="postgresql://<user>:<password>@<host>:<post>/crystal?sslmode=require"
 
 # uploading api key and app id
 UPLOADTHING_SECRET=sk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -57,7 +57,7 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 # livekit api keys and public url
 LIVEKIT_API_KEY=XXXXXXXXXXXXXXXXX
 LIVEKIT_API_SECRET=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-NEXT_PUBLIC_LIVEKIT_URL=wss://discord-clone-xxxxxxxxxx.livekit.cloud
+NEXT_PUBLIC_LIVEKIT_URL=wss://crystal-xxxxxxxxxx.livekit.cloud
 
 ```
 
