@@ -127,7 +127,7 @@ NEXT_PUBLIC_LIVEKIT_URL=wss://discord-clone-xxxxxxxxxx.livekit.cloud
 
 ## :raised_hands: Contribute
 
-To contribute to Crystal, check out the [Contributing section](https://github.com/endr-tech/crystal/blob/CONTRIBUTING.md) on how to contribute to the project.
+To contribute to Crystal, check out the [Contributing section](https://github.com/endr-tech/crystal/blob/main/CONTRIBUTING.md) on how to contribute to the project.
 
 If you have any questions, please reach out on the ENDR Developer Hub Discord server, on the Crystal Discord server, or in our official servers on this very platform, Crystal!
 
