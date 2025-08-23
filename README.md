@@ -3,12 +3,12 @@
 # Private. Secure. Open source. Its the new way to chat online.
 ![Something big is coming.](https://pbs.twimg.com/profile_banners/1952283485856829440/1755849777/1500x500 "Crystal - Private. Secure. Open source. Its the new way to chat online.")
 
-[![GitHub license](https://flat.badgen.net/github/license/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/blob/main/LICENSE "GitHub license")
-[![Maintenance](https://flat.badgen.net/static/Maintained/yes?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/commits/main "Maintenance")
-[![GitHub branches](https://flat.badgen.net/github/branches/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/branches "GitHub branches")
-[![Github commits](https://flat.badgen.net/github/commits/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/commits "Github commits")
-[![GitHub issues](https://flat.badgen.net/github/issues/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/issues "GitHub issues")
-[![GitHub pull requests](https://flat.badgen.net/github/prs/endr-tech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endr-tech/crystal/pulls "GitHub pull requests")
+[![GitHub license](https://flat.badgen.net/github/license/endrtech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/blob/main/LICENSE "GitHub license")
+[![Maintenance](https://flat.badgen.net/static/Maintained/yes?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/commits/main "Maintenance")
+[![GitHub branches](https://flat.badgen.net/github/branches/endrtech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/branches "GitHub branches")
+[![Github commits](https://flat.badgen.net/github/commits/endrtech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/commits "Github commits")
+[![GitHub issues](https://flat.badgen.net/github/issues/endrtech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/issues "GitHub issues")
+[![GitHub pull requests](https://flat.badgen.net/github/prs/endrtech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/pulls "GitHub pull requests")
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/endrtech/crystal?utm_source=oss&utm_medium=github&utm_campaign=endrtech%2Fcrystal&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 # ❓ What is Crystal?
@@ -121,7 +121,7 @@ NEXT_PUBLIC_LIVEKIT_URL=wss://crystal-xxxxxxxxxx.livekit.cloud
 
 ## :raised_hands: Contribute
 
-To contribute to Crystal, check out the [Contributing section](https://github.com/endr-tech/crystal/blob/main/CONTRIBUTING.md) on how to contribute to the project.
+To contribute to Crystal, check out the [Contributing section](https://github.com/endrtech/crystal/blob/main/CONTRIBUTING.md) on how to contribute to the project.
 
 If you have any questions, please reach out on the ENDR Developer Hub Discord server, on the Crystal Discord server, or in our official servers on this very platform, Crystal!
 
@@ -239,11 +239,11 @@ You can also give this repository a star to show more people and they can use th
 
 ## :star2: Star History
 
-<a href="https://star-history.com/#endr-tech/crystal&Timeline">
+<a href="https://star-history.com/#endrtech/crystal&Timeline">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=endr-tech/crystal&type=Timeline&theme=dark" />
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=endr-tech/crystal&type=Timeline" />
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=endr-tech/crystal&type=Timeline" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=endrtech/crystal&type=Timeline&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=endrtech/crystal&type=Timeline" />
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=endrtech/crystal&type=Timeline" />
 </picture>
 </a>
 
