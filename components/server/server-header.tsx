@@ -80,7 +80,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
         )}
         {canManageServer && (
           <DropdownMenuItem
-            onClick={() => onOpen("serverSettings", { server, currentMember: member })}
+            onClick={() => onOpen("enhancedServerSettings", { server, currentMember: member })}
             className="px-3 py-2 text-sm cursor-pointer"
           >
             Server Settings
