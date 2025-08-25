@@ -12,8 +12,8 @@ import { X, FileIcon, Plus, Send } from "lucide-react";
 import { useRef, useState, useEffect, useMemo } from "react";
 import clsx from "clsx";
 import { EmojiPicker } from "../emoji-picker";
-import { PermissionType, PermissionScope } from "@/types/permissions";
-import { usePermissions } from "@/hooks/use-permissions";
+import { PermissionType, PermissionScope } from "@prisma/client";
+import { useChannelPermissions, useServerPermissions } from "@/hooks/use-simple-permissions";
 
 const formSchema = z.object({
   content: z.string().optional(),
@@ -40,25 +40,60 @@ type ChatInputProps = {
 export const ChatInput = ({ apiUrl, query, name, type, member, channelId }: ChatInputProps) => {
   const [isDragging, setIsDragging] = useState(false);
   
-  const scope = type === "channel" ? PermissionScope.CHANNEL : PermissionScope.SERVER;
-  const targetId = type === "channel" ? channelId : undefined;
+  // Try to use permissions system with fallback
+  let permissions: any = null;
+  let permissionsError = false;
   
-  // Memoize the permissions array to prevent infinite re-renders
-  const permissionsToCheck = useMemo(() => [
-    { permission: PermissionType.SEND_MESSAGES, scope, targetId },
-    { permission: PermissionType.ATTACH_FILES, scope, targetId },
-    { permission: PermissionType.USE_EXTERNAL_EMOJIS, scope, targetId }
-  ], [scope, targetId]);
+  try {
+    // Use appropriate permissions hook based on type
+    const channelPermissions = useChannelPermissions(member?.id || '', channelId || '');
+    const serverPermissions = useServerPermissions(member?.id || '');
+    permissions = type === "channel" ? channelPermissions : serverPermissions;
+  } catch (error) {
+    console.error('Permissions hook error:', error);
+    permissionsError = true;
+  }
   
-  const permissions = usePermissions({
-    memberId: member?.id || '',
-    permissions: permissionsToCheck
+  // Permission checks
+  let canSendMessages = true; // Default to allow
+  let canAttachFiles = true;
+  let canUseExternalEmojis = true;
+  
+  if (!permissionsError && permissions && member?.id && !permissions.loading) {
+    try {
+      if (type === "conversation") {
+        // For conversations, always allow
+        canSendMessages = true;
+        canAttachFiles = true;
+        canUseExternalEmojis = true;
+      } else {
+        // For channels, check permissions properly
+        canSendMessages = permissions.isAdmin || permissions.canSendMessages;
+        canAttachFiles = permissions.isAdmin || permissions.hasPermission?.(PermissionType.ATTACH_FILES, PermissionScope.CHANNEL, channelId)?.granted || false;
+        canUseExternalEmojis = permissions.isAdmin || permissions.hasPermission?.(PermissionType.USE_EXTERNAL_EMOJIS, PermissionScope.CHANNEL, channelId)?.granted || false;
+      }
+    } catch (error) {
+      console.error('Permission calculation error:', error);
+      // Fallback to admin check only
+      canSendMessages = permissions?.isAdmin || true;
+      canAttachFiles = permissions?.isAdmin || true;
+      canUseExternalEmojis = permissions?.isAdmin || true;
+    }
+  }
+  
+  // Log for debugging
+  console.log('Chat Input Debug:', {
+    type,
+    memberId: member?.id,
+    channelId,
+    permissionsError,
+    hasPermissions: !!permissions,
+    loading: permissions?.loading,
+    isAdmin: permissions?.isAdmin,
+    canSendMessages,
+    canAttachFiles,
+    canUseExternalEmojis
   });
-  
-  // Extract permission checks for easier use
-  const canSendMessages = permissions.getPermission(PermissionType.SEND_MESSAGES, scope, targetId).granted;
-  const canAttachFiles = permissions.getPermission(PermissionType.ATTACH_FILES, scope, targetId).granted;
-  const canUseExternalEmojis = permissions.getPermission(PermissionType.USE_EXTERNAL_EMOJIS, scope, targetId).granted;
 
   const methods = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

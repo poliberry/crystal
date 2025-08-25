@@ -1,4 +1,4 @@
-# Code of Conduct - Discord Clone
+# Code of Conduct - Crystal
 
 ## Our Pledge
 
