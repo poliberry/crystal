@@ -125,6 +125,8 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
                 channelId: channel.id,
                 serverId: channel.serverId,
               }}
+              member={member}
+              channelId={channel.id}
             />
           </>
         )}

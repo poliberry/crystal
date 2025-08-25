@@ -139,6 +139,7 @@ export function ConversationLayout({
             query={{
               conversationId: conversation.id,
             }}
+            member={currentConversationMember}
           />
         </div>
 
@@ -210,6 +211,7 @@ export function ConversationLayout({
           query={{
             conversationId: conversation.id,
           }}
+          member={currentConversationMember}
         />
       </div>
 
