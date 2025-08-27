@@ -312,7 +312,10 @@ export function UserDialog({
                   />
                 </div>
               </div>
-              {displayProfile?.presenceStatus && (
+              {displayProfile?.presenceStatus && 
+               displayProfile.presenceStatus.trim() !== "" && 
+               displayProfile.presenceStatus.trim() !== "undefined" && 
+               displayProfile.presenceStatus.trim() !== "null" && (
                 <div className="bg-background border border-border rounded-lg px-3 py-2 z-[10] shadow-sm max-w-48 mt-10">
                   <p className="text-sm text-foreground truncate">
                     {displayProfile.presenceStatus}
@@ -455,7 +458,10 @@ export function UserDialog({
             </div>
 
             {/* Custom Status Bubble */}
-            {displayProfile?.presenceStatus && (
+            {displayProfile?.presenceStatus && 
+             displayProfile.presenceStatus.trim() !== "" && 
+             displayProfile.presenceStatus.trim() !== "undefined" && 
+             displayProfile.presenceStatus.trim() !== "null" && (
               <div className="bg-background border border-border rounded-lg px-3 py-2 shadow-sm max-w-48 mt-2">
                 <p className="text-sm text-foreground truncate">
                   {displayProfile.presenceStatus}

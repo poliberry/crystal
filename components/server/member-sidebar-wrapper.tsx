@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
-import { EnhancedMemberSidebar } from "./enhanced-member-sidebar";
+import { EnhancedMemberSidebar } from "./enhanced-member-sidebar-pusher";
 
 type MemberSidebarWrapperProps = {
   serverId: string;

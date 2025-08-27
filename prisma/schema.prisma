@@ -126,6 +126,10 @@ model Profile {
   receivedFriendRequests Friendship[] @relation("FriendshipReceiver")
   sentBlocks             Block[]      @relation("BlockRequester")
   receivedBlocks         Block[]      @relation("BlockReceiver")
+  
+  // Ban relations
+  bansReceived Ban[]
+  bansGiven    Ban[] @relation("BannedBy")
 }
 
 model Server {
@@ -144,6 +148,9 @@ model Server {
   // New permission system relations
   roles              Role[]
   permissionAuditLogs PermissionAuditLog[]
+  
+  // Ban records for this server
+  bans Ban[]
 
   // Notification relation
   notifications Notification[]
@@ -643,4 +650,26 @@ model PermissionAuditLog {
   @@index([targetType, targetId])
   @@index([performedBy])
   @@index([createdAt])
+}
+
+// Server ban records
+model Ban {
+  id String @id @default(uuid())
+  
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  bannedById String
+  bannedBy   Profile @relation("BannedBy", fields: [bannedById], references: [id], onDelete: Cascade)
+  
+  reason    String?
+  createdAt DateTime @default(now())
+  
+  @@unique([serverId, profileId])
+  @@index([serverId])
+  @@index([profileId])
+  @@index([bannedById])
 }

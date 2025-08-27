@@ -3,7 +3,7 @@
   "version": "1.0.4",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -67,6 +67,8 @@
     "nprogress": "^0.2.0",
     "ogl": "^1.0.11",
     "open-graph-scraper": "^6.10.0",
+    "pusher": "^5.2.0",
+    "pusher-js": "^8.4.0",
     "query-string": "^9.0.0",
     "react": "^18",
     "react-dom": "^18",

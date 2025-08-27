@@ -26,7 +26,11 @@ import {
   Hash,
   ChevronRight,
   Search,
-  Filter
+  Filter,
+  Ban,
+  UserMinus,
+  UserX,
+  AlertTriangle
 } from "lucide-react";
 
 import {
@@ -118,7 +122,56 @@ export const EnhancedServerSettingsModal = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+    const [selectedMember, setSelectedMember] = useState<any>(null);
+  
+  // Member management functions
+  const kickMember = async (memberId: string) => {
+    if (!server || !canManageRoles) return;
+    
+    try {
+      setLoading(true);
+      await axios.delete(`/api/servers/${server.id}/members/${memberId}/kick`);
+      // Refresh members data
+      const response = await axios.get(`/api/servers/${server.id}/members`);
+      setMembers(response.data.members);
+    } catch (error) {
+      console.error("Failed to kick member:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const banMember = async (memberId: string) => {
+    if (!server || !canManageRoles) return;
+    
+    try {
+      setLoading(true);
+      await axios.post(`/api/servers/${server.id}/members/${memberId}/ban`);
+      // Refresh members data
+      const response = await axios.get(`/api/servers/${server.id}/members`);
+      setMembers(response.data.members);
+    } catch (error) {
+      console.error("Failed to ban member:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Count permissions for a member
+  const countMemberPermissions = (member: any): number => {
+    if (!member.roles) return 0;
+    
+    const uniquePermissions = new Set<string>();
+    member.roles.forEach((role: any) => {
+      role.permissions?.forEach((permission: any) => {
+        if (permission.grant === 'ALLOW') {
+          uniquePermissions.add(permission.permission);
+        }
+      });
+    });
+    
+    return uniquePermissions.size;
+  };
   const [editingRole, setEditingRole] = useState<{ name: string; color: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -352,7 +405,7 @@ export const EnhancedServerSettingsModal = () => {
   };
 
   const getPermissionDescription = (permission: PermissionType): string => {
-    const descriptions: Record<PermissionType, string> = {
+    const descriptions: Partial<Record<PermissionType, string>> = {
       [PermissionType.ADMINISTRATOR]: "Full control over the server",
       [PermissionType.MANAGE_SERVER]: "Edit server settings and information",
       [PermissionType.MANAGE_ROLES]: "Create, edit, and delete roles",
@@ -400,18 +453,18 @@ export const EnhancedServerSettingsModal = () => {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden p-0 bg-white dark:bg-gray-900">
-        <div className="flex h-full">
+      <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full rounded-lg overflow-hidden p-0 bg-white dark:bg-black">
+        <div className="flex h-full max-h-[95vh]">
           {/* Sidebar Navigation */}
-          <div className="w-60 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-            <DialogHeader className="px-4 py-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="w-60 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-0">
+            <DialogHeader className="px-4 py-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
               <DialogTitle className="text-lg font-semibold flex items-center gap-2">
                 <Settings className="h-5 w-5" />
                 Server Settings
               </DialogTitle>
             </DialogHeader>
             
-            <ScrollArea className="flex-1 px-2 py-4">
+            <ScrollArea className="flex-1 px-2 py-4 min-h-0">
               <div className="space-y-1">
                 <Button
                   variant={activeTab === "overview" ? "secondary" : "ghost"}
@@ -444,7 +497,7 @@ export const EnhancedServerSettingsModal = () => {
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Tab Content */}
             {activeTab === "overview" && (
               <div className="flex-1 overflow-y-auto p-6">
@@ -520,10 +573,10 @@ export const EnhancedServerSettingsModal = () => {
             )}
 
             {activeTab === "roles" && (
-              <div className="flex-1 flex overflow-hidden">
+              <div className="flex-1 flex overflow-hidden min-h-0">
                 {/* Roles List */}
-                <div className="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-                  <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-0">
+                  <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-semibold">Roles</h3>
                       <Button
@@ -555,7 +608,7 @@ export const EnhancedServerSettingsModal = () => {
                     </div>
                   </div>
                   
-                  <ScrollArea className="flex-1">
+                  <ScrollArea className="flex-1 min-h-0">
                     <div className="p-4 space-y-2">
                       {roles
                         .sort((a, b) => b.position - a.position)
@@ -583,10 +636,10 @@ export const EnhancedServerSettingsModal = () => {
                             
                             <div className="flex items-center gap-1">
                               {role.hoisted && (
-                                <Eye className="h-4 w-4 text-gray-400" title="Displayed separately" />
+                                <Eye className="h-4 w-4 text-gray-400" />
                               )}
                               {role.mentionable && (
-                                <Hash className="h-4 w-4 text-gray-400" title="Mentionable" />
+                                <Hash className="h-4 w-4 text-gray-400" />
                               )}
                               {role.name !== "everyone" && canManageRoles && (
                                 <DropdownMenu>
@@ -632,126 +685,128 @@ export const EnhancedServerSettingsModal = () => {
                 </div>
 
                 {/* Role Details */}
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-hidden min-h-0">
                   {selectedRole ? (
-                    <div className="p-6">
-                      <div className="mb-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-6 h-6 rounded-full"
-                              style={{ backgroundColor: selectedRole.color }}
-                            />
-                            {editingRole ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingRole.name}
-                                  onChange={(e) => setEditingRole({ ...editingRole, name: e.target.value })}
-                                  className="text-lg font-semibold"
-                                />
-                                <ColorPicker
-                                  value={editingRole.color}
-                                  onChange={(color: string) => setEditingRole({ ...editingRole, color })}
-                                  disabled={!canManageRoles}
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={() => updateRole(selectedRole.id, editingRole)}
-                                  disabled={!canManageRoles}
-                                >
-                                  <Save className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setEditingRole(null)}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <h2 className="text-2xl font-bold">{selectedRole.name}</h2>
-                                {selectedRole.name !== "everyone" && canManageRoles && (
+                    <ScrollArea className="h-full">
+                      <div className="p-6">
+                        <div className="mb-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-6 h-6 rounded-full"
+                                style={{ backgroundColor: selectedRole.color }}
+                              />
+                              {editingRole ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={editingRole.name}
+                                    onChange={(e) => setEditingRole({ ...editingRole, name: e.target.value })}
+                                    className="text-lg font-semibold"
+                                  />
+                                  <ColorPicker
+                                    value={editingRole.color}
+                                    onChange={(color: string) => setEditingRole({ ...editingRole, color })}
+                                    disabled={!canManageRoles}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateRole(selectedRole.id, editingRole)}
+                                    disabled={!canManageRoles}
+                                  >
+                                    <Save className="h-4 w-4" />
+                                  </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    onClick={() => setEditingRole({ name: selectedRole.name, color: selectedRole.color })}
+                                    onClick={() => setEditingRole(null)}
                                   >
-                                    <Edit3 className="h-4 w-4" />
+                                    <X className="h-4 w-4" />
                                   </Button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <Badge variant="secondary">
-                            {selectedRole.memberCount} members
-                          </Badge>
-                        </div>
-
-                        {selectedRole.name !== "everyone" && (
-                          <div className="flex gap-4 mb-6">
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={selectedRole.hoisted}
-                                onCheckedChange={(checked) => updateRole(selectedRole.id, { hoisted: checked })}
-                                disabled={!canManageRoles}
-                              />
-                              <Label>Display role members separately from online members</Label>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <h2 className="text-2xl font-bold">{selectedRole.name}</h2>
+                                  {selectedRole.name !== "everyone" && canManageRoles && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => setEditingRole({ name: selectedRole.name, color: selectedRole.color })}
+                                    >
+                                      <Edit3 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={selectedRole.mentionable}
-                                onCheckedChange={(checked) => updateRole(selectedRole.id, { mentionable: checked })}
-                                disabled={!canManageRoles}
-                              />
-                              <Label>Allow anyone to @mention this role</Label>
-                            </div>
+                            <Badge variant="secondary">
+                              {selectedRole.memberCount} members
+                            </Badge>
                           </div>
-                        )}
-                      </div>
 
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Permissions</CardTitle>
-                          <CardDescription>
-                            Configure what members with this role can do
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-6">
-                            {Object.entries(PERMISSION_GROUPS).map(([groupName, groupPermissions]) => (
-                              <div key={groupName}>
-                                <h4 className="font-medium mb-3 text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                  {groupName.replace(/_/g, ' ')}
-                                </h4>
-                                <div className="space-y-3">
-                                  {groupPermissions.map((permission) => (
-                                    <div key={permission} className="flex items-center justify-between">
-                                      <div className="space-y-1">
-                                        <p className="font-medium">{permission.replace(/_/g, ' ')}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                                          {getPermissionDescription(permission)}
-                                        </p>
-                                      </div>
-                                      <Switch
-                                        checked={selectedRole.permissions.some(p => p.permission === permission)}
-                                        onCheckedChange={(checked) =>
-                                          updateRolePermissions(selectedRole.id, permission, checked)
-                                        }
-                                        disabled={!canManageRoles}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
+                          {selectedRole.name !== "everyone" && (
+                            <div className="flex gap-4 mb-6">
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={selectedRole.hoisted}
+                                  onCheckedChange={(checked) => updateRole(selectedRole.id, { hoisted: checked })}
+                                  disabled={!canManageRoles}
+                                />
+                                <Label>Display role members separately from online members</Label>
                               </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={selectedRole.mentionable}
+                                  onCheckedChange={(checked) => updateRole(selectedRole.id, { mentionable: checked })}
+                                  disabled={!canManageRoles}
+                                />
+                                <Label>Allow anyone to @mention this role</Label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Permissions</CardTitle>
+                            <CardDescription>
+                              Configure what members with this role can do
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-6">
+                              {Object.entries(PERMISSION_GROUPS).map(([groupName, groupPermissions]) => (
+                                <div key={groupName}>
+                                  <h4 className="font-medium mb-3 text-sm uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    {groupName.replace(/_/g, ' ')}
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {groupPermissions.map((permission) => (
+                                      <div key={permission} className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                          <p className="font-medium">{permission.replace(/_/g, ' ')}</p>
+                                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            {getPermissionDescription(permission)}
+                                          </p>
+                                        </div>
+                                        <Switch
+                                          checked={selectedRole.permissions.some(p => p.permission === permission)}
+                                          onCheckedChange={(checked) =>
+                                            updateRolePermissions(selectedRole.id, permission, checked)
+                                          }
+                                          disabled={!canManageRoles}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </ScrollArea>
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
                       <div className="text-center">
@@ -765,8 +820,8 @@ export const EnhancedServerSettingsModal = () => {
             )}
 
             {activeTab === "members" && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold">Members</h3>
                     <Badge variant="secondary">{members.length} members</Badge>
@@ -805,7 +860,7 @@ export const EnhancedServerSettingsModal = () => {
                   </div>
                 </div>
                 
-                <ScrollArea className="flex-1">
+                <ScrollArea className="flex-1 min-h-0">
                   <div className="p-4">
                     {sortedGroups.map(([roleId, group]) => (
                       <div key={roleId} className="mb-6">
@@ -825,14 +880,22 @@ export const EnhancedServerSettingsModal = () => {
                               key={member.id}
                               className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                             >
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
                                 <UserAvatar
                                   src={member.user.imageUrl}
-                                  className="h-8 w-8"
+                                  alt={member.user.name}
+                                  className="h-10 w-10"
                                 />
-                                <div>
-                                  <p className="font-medium">{member.user.name}</p>
-                                  <div className="flex gap-1 mt-1">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="font-medium truncate">{member.user.name}</p>
+                                    {member.user.id === server.profileId && (
+                                      <Crown className="h-4 w-4 text-yellow-500" />
+                                    )}
+                                  </div>
+                                  
+                                  {/* Roles */}
+                                  <div className="flex gap-1 mb-1 flex-wrap">
                                     {member.roles.map((role) => (
                                       <Badge
                                         key={role.id}
@@ -844,25 +907,55 @@ export const EnhancedServerSettingsModal = () => {
                                       </Badge>
                                     ))}
                                   </div>
+                                  
+                                  {/* Permissions count */}
+                                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                                    <span className="flex items-center gap-1">
+                                      <Shield className="h-3 w-3" />
+                                      {countMemberPermissions(member)} permissions
+                                    </span>
+                                    {member.joinedAt && (
+                                      <span>
+                                        Joined {new Date(member.joinedAt).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               
-                              {canManageRoles && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="ghost">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() => setSelectedMember(member)}
-                                    >
-                                      <Edit3 className="h-4 w-4 mr-2" />
-                                      Manage Roles
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                              {/* Action buttons */}
+                              {canManageRoles && member.user.id !== server.profileId && (
+                                <div className="flex items-center gap-2">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button size="sm" variant="ghost">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={() => setSelectedMember(member)}
+                                      >
+                                        <Edit3 className="h-4 w-4 mr-2" />
+                                        Manage Roles
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => kickMember(member.id)}
+                                        className="text-orange-600 dark:text-orange-400"
+                                      >
+                                        <UserMinus className="h-4 w-4 mr-2" />
+                                        Kick Member
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => banMember(member.id)}
+                                        className="text-red-600 dark:text-red-400"
+                                      >
+                                        <Ban className="h-4 w-4 mr-2" />
+                                        Ban Member
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               )}
                             </div>
                           ))}

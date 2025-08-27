@@ -9,7 +9,7 @@ import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { getPresenceStatus, getStatusColor } from "@/lib/presence-utils";
+import { getDiscordPresence, getStatusColor } from "@/lib/presence-utils";
 
 import { UserAvatar } from "../user-avatar";
 import { useEffect, useState } from "react";
@@ -48,9 +48,8 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
   const router = useRouter();
 
   // Get the correct presence status
-  const presenceInfo = getPresenceStatus(
+  const presence = getDiscordPresence(
     member.profile.status,
-    member.profile.prevStatus,
     member.profile.presenceStatus
   );
 
@@ -79,26 +78,26 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
           alt={member.profile.name}
           className={cn(
             "h-8 w-8 md:h-8 md:w-8 transition",
-            !presenceInfo.isOnline && "opacity-40"
+            !presence.isOnline && "opacity-40"
           )}
         />
         <span
           className={cn(
             "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white",
-            getStatusColor(presenceInfo.status)
+            getStatusColor(presence.status)
           )}
-          title={presenceInfo.displayStatus}
+          title={presence.displayText}
         />
       </div>
       <div className="flex flex-col items-start">
         <p
           className={cn(
             "font-semibold text-sm group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition",
-            !presenceInfo.isOnline
+            !presence.isOnline
               ? "text-zinc-400 opacity-70"
               : "text-zinc-500 dark:text-zinc-400",
             params?.memberId === member.id &&
-              (presenceInfo.isOnline
+              (presence.isOnline
                 ? "text-primary dark:text-zinc-200 dark:group-hover:text-white"
                 : "")
           )}
@@ -106,7 +105,7 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
           {member.profile.name}
         </p>
         <p className="text-xs text-zinc-400">
-          {presenceInfo.displayStatus}
+          {presence.customStatus}
         </p>
       </div>
       {icon}

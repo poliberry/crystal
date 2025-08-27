@@ -1,12 +1,13 @@
 "use client";
 
-import { ChannelType, MemberRole } from "@prisma/client";
+import { ChannelType, MemberRole, UserStatus } from "@prisma/client";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { db } from "@/lib/db";
+import { getDiscordPresence, shouldShowInOnlineList } from "@/lib/presence-utils";
 
 import { ServerChannel } from "./server-channel";
 import { ServerHeader } from "./server-header";
@@ -64,22 +65,82 @@ export const MemberSidebar = ({ serverId, initialData, currentProfile }: ServerS
     (member: any) => member.profileId === profile.id,
   )?.role;
 
+  // Discord-like member categorization with enhanced presence logic
+  const categorizedMembers = useMemo(() => {
+    if (!members?.length) return { online: [], offline: [] };
+
+    const online: any[] = [];
+    const offline: any[] = [];
+
+    members.forEach((member: any) => {
+      const presence = getDiscordPresence(member.profile.status, member.profile.presenceStatus);
+      
+      if (presence.isOnline) {
+        online.push(member);
+      } else {
+        offline.push(member);
+      }
+    });
+
+    // Sort each category by role priority, then name
+    const roleOrder: Record<MemberRole, number> = { 
+      [MemberRole.ADMIN]: 0, 
+      [MemberRole.MODERATOR]: 1, 
+      [MemberRole.GUEST]: 2 
+    };
+    
+    const sortMembers = (a: any, b: any) => {
+      const roleA = roleOrder[a.role as MemberRole] ?? 999;
+      const roleB = roleOrder[b.role as MemberRole] ?? 999;
+      if (roleA !== roleB) return roleA - roleB;
+      return (a.profile.globalName || a.profile.name).localeCompare(b.profile.globalName || b.profile.name);
+    };
+
+    return {
+      online: online.sort(sortMembers),
+      offline: offline.sort(sortMembers)
+    };
+  }, [members]);
+
   return (
     <div className="flex flex-col h-full text-primary w-full bg-transparent border-l border-muted">
       <div className="px-3 mt-2 border-b border-muted pb-2">
         <ServerSection
           sectionType="members"
           server={server}
-          role={role}
+          member={server.members.find((member: any) => member.profileId === profile.id)}
           label="Members"
         />
       </div>
       <ScrollArea className="flex-1 px-3 shadow-md dark:bg-black bg-white rounded-xl">
         <div className="mt-2">
-          {!!members?.length && (
-            <div className="mb-2">
+          {/* Online Members */}
+          {categorizedMembers.online.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+                Online — {categorizedMembers.online.length}
+              </h3>
               <div className="space-y-[2px]">
-                {members.map((member: any) => (
+                {categorizedMembers.online.map((member: any) => (
+                  <ServerMember
+                    key={member.id}
+                    member={member}
+                    profile={profile}
+                    server={server}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Offline Members */}
+          {categorizedMembers.offline.length > 0 && (
+            <div className="mb-2">
+              <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+                Offline — {categorizedMembers.offline.length}
+              </h3>
+              <div className="space-y-[2px]">
+                {categorizedMembers.offline.map((member: any) => (
                   <ServerMember
                     key={member.id}
                     member={member}

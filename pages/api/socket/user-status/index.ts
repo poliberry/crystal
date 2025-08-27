@@ -35,16 +35,45 @@ export default async function handler(
             return res.status(400).json({ error: "Invalid status value." });
         }
 
+        // Get current profile state for comparison
+        const currentProfile = await db.profile.findUnique({
+            where: { id: profile.id },
+            select: { status: true, presenceStatus: true }
+        });
+
+        if (!currentProfile) {
+            return res.status(404).json({ error: "Profile not found" });
+        }
+
         await db.profile.update({
             where: { id: profile.id },
             data: { status: status as UserStatus, prevStatus: profile.status as UserStatus },
         });
 
-        // Emit the updated user status to all connected clients
-        res?.socket?.server?.io?.emit("user:status:update", {
-            userId: profile.userId,
-            status: status as UserStatus,
-        });
+        // Only emit if status actually changed
+        if (status !== currentProfile.status) {
+            // Emit the updated user status to all connected clients with enhanced data
+            res?.socket?.server?.io?.emit("user:status:update", {
+                userId: profile.userId,
+                status: status as UserStatus,
+                presenceStatus: currentProfile.presenceStatus,
+                prevStatus: profile.status as UserStatus,
+            });
+
+            // Also emit combined update
+            res?.socket?.server?.io?.emit("presence-status-update", {
+                profileId: profile.id,
+                userId: profile.userId,
+                status: status as UserStatus,
+                presenceStatus: currentProfile.presenceStatus,
+                prevStatus: profile.status as UserStatus,
+            });
+
+            // Trigger member list updates
+            res?.socket?.server?.io?.emit("members:poll");
+
+            console.log(`[SOCKET_STATUS_UPDATE] User ${profile.userId} status changed from ${profile.status} to ${status}`);
+        }
 
         return res.status(200).json({ message: "User status updated successfully." });
     } catch (error: unknown) {

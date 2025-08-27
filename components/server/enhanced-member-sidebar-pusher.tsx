@@ -14,25 +14,17 @@ import { ServerHeader } from "./server-header";
 import { EnhancedServerMember } from "./enhanced-server-member";
 import { ServerSection } from "./server-section";
 
-type EnhancedMemberSidebarProps = {
+const roleIconMap = {
+  [MemberRole.GUEST]: null,
+  [MemberRole.MODERATOR]: <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />,
+  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
+};
+
+interface EnhancedMemberSidebarProps {
   serverId: string;
   initialData: any;
   currentProfile: any;
-};
-
-const iconMap = {
-  [ChannelType.TEXT]: <Hash className="mr-2 h-4 w-4" />,
-  [ChannelType.AUDIO]: <Mic className="mr-2 h-4 w-4" />,
-  [ChannelType.VIDEO]: <Video className="mr-2 h-4 w-4" />,
-};
-
-const roleIconMap = {
-  [MemberRole.GUEST]: null,
-  [MemberRole.MODERATOR]: (
-    <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-  ),
-  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />,
-};
+}
 
 interface RoleWithMembers {
   role: {
@@ -53,19 +45,11 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
   const profile = currentProfile;
 
   console.log(`[ENHANCED_MEMBER_SIDEBAR] Component rendered. Server ID: ${serverId}`);
-  console.log(`[ENHANCED_MEMBER_SIDEBAR] Initial data:`, initialData);
-  console.log(`[ENHANCED_MEMBER_SIDEBAR] Server state:`, server);
-  console.log(`[ENHANCED_MEMBER_SIDEBAR] Server members:`, server?.members);
-  console.log(`[ENHANCED_MEMBER_SIDEBAR] Members count:`, server?.members?.length || 0);
-  console.log(`[ENHANCED_MEMBER_SIDEBAR] Online members size:`, onlineMembers.size);
 
-  // Initialize online members from server data
+  // Initialize online members based on server data
   useEffect(() => {
-    if (!server?.members) {
-      console.log(`[ENHANCED_MEMBER_SIDEBAR] No server members found`);
-      return;
-    }
-    
+    if (!server?.members) return;
+
     const initialOnline = new Map<string, UserStatus>();
 
     server.members.forEach((member: any) => {
@@ -86,6 +70,7 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
     setOnlineMembers(initialOnline);
   }, [server?.members]);
 
+  // Pusher event listeners
   useEffect(() => {
     if (!pusher || !isConnected) {
       console.log(`[ENHANCED_MEMBER_SIDEBAR] No pusher connection available`);
@@ -94,11 +79,11 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
 
     console.log(`[ENHANCED_MEMBER_SIDEBAR] Setting up Pusher listeners for presence events`);
 
-    const memberUpdateKey = `members:poll`;
-    const userStatusKey = `user:status:update`;
-    const presenceUpdateKey = `user:presence:update`;
+    // Subscribe to the presence channel
+    const channel = pusher.subscribe("presence");
 
     const handleMemberUpdate = async () => {
+      console.log(`[ENHANCED_MEMBER_SIDEBAR] Members poll event received`);
       try {
         const response = await fetch(`/api/servers/${serverId}/members`);
         const updatedServer = await response.json();
@@ -109,6 +94,7 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
     };
 
     const handleUserStatusUpdate = (data: { userId: string; status: UserStatus; presenceStatus?: string; prevStatus?: UserStatus }) => {
+      console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Received user:status:update:`, data);
       setOnlineMembers(prev => {
         const newMap = new Map(prev);
         
@@ -118,58 +104,61 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
           data.presenceStatus || null
         );
         
+        console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ User ${data.userId} presence:`, presence);
+        
         if (presence.isOnline) {
           newMap.set(data.userId, presence.status);
+          console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Added ${data.userId} to online list`);
         } else {
           newMap.delete(data.userId);
+          console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Removed ${data.userId} from online list`);
         }
         
+        console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Updated online members:`, Array.from(newMap.keys()));
         return newMap;
       });
     };
 
     const handlePresenceUpdate = (data: { userId: string; presenceStatus: string | null; status?: UserStatus; prevStatus?: UserStatus }) => {
-      console.log(`[MEMBER_SIDEBAR] Presence update for user ${data.userId}:`, data);
-      
+      console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Received presence update:`, data);
       setOnlineMembers(prev => {
         const newMap = new Map(prev);
         
-        // Get current status for this user (or use provided status)
-        const currentStatus = data.status || prev.get(data.userId) || UserStatus.ONLINE;
-        
         // Use presence logic to determine if user should be online
         const presence = getDiscordPresence(
-          currentStatus,
-          data.presenceStatus  // This is the custom status message
+          data.status || UserStatus.OFFLINE,
+          data.presenceStatus
         );
         
-        console.log(`[MEMBER_SIDEBAR] Presence info for ${data.userId}:`, presence);
+        console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ User ${data.userId} presence:`, presence);
         
         if (presence.isOnline) {
           newMap.set(data.userId, presence.status);
+          console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Added ${data.userId} to online list`);
         } else {
           newMap.delete(data.userId);
+          console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Removed ${data.userId} from online list`);
         }
         
+        console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Updated online members:`, Array.from(newMap.keys()));
         return newMap;
       });
     };
 
-    socket.on(memberUpdateKey, handleMemberUpdate);
-    socket.on(userStatusKey, handleUserStatusUpdate);
-    socket.on(presenceUpdateKey, handlePresenceUpdate);
-    // Also listen to alternative event names for compatibility
-    socket.on("user-status-change", handleUserStatusUpdate);
-    socket.on("presence-status-update", handlePresenceUpdate);
+    // Bind to Pusher events
+    channel.bind("members:poll", handleMemberUpdate);
+    channel.bind("user:status:update", handleUserStatusUpdate);
+    channel.bind("user:presence:update", handlePresenceUpdate);
+    channel.bind("presence-status-update", handlePresenceUpdate);
 
     return () => {
-      socket.off(memberUpdateKey, handleMemberUpdate);
-      socket.off(userStatusKey, handleUserStatusUpdate);
-      socket.off(presenceUpdateKey, handlePresenceUpdate);
-      socket.off("user-status-change", handleUserStatusUpdate);
-      socket.off("presence-status-update", handlePresenceUpdate);
+      channel.unbind("members:poll", handleMemberUpdate);
+      channel.unbind("user:status:update", handleUserStatusUpdate);
+      channel.unbind("user:presence:update", handlePresenceUpdate);
+      channel.unbind("presence-status-update", handlePresenceUpdate);
+      // Don't unsubscribe from channel as other components might be using it
     };
-  }, [socket, serverId]);
+  }, [pusher, isConnected, serverId]);
 
   const members = server?.members || [];
   const role = server.members?.find(
@@ -181,6 +170,7 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
     totalMembers: members.length,
     onlineMembersCount: onlineMembers.size,
     onlineUserIds: Array.from(onlineMembers.keys()),
+    allMemberUserIds: members.map((m: any) => m.profile?.userId),
     sampleMember: members[0] ? {
       name: members[0].profile?.name,
       userId: members[0].profile?.userId,
@@ -190,6 +180,9 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
 
   // Group members by their highest role with proper Discord-like categorization
   const groupMembersByRole = (): RoleWithMembers[] => {
+    console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Grouping ${members.length} members by role`);
+    console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Members:`, members.map((m: any) => ({ name: m.profile?.name, userId: m.profile?.userId, status: m.profile?.status })));
+    
     const roleGroups: Record<string, RoleWithMembers> = {};
     
     // Initialize with server roles that are hoisted
@@ -218,7 +211,7 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
       onlineCount: 0
     };
 
-    // Group members based on their online status and highest hoisted role
+    // Group members based on their roles (show all members, not just online ones)
     members.forEach((member: any) => {
       const memberRoles = member.roles || [];
       const hoistedRole = memberRoles
@@ -227,34 +220,34 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
 
       const userId = member.profile?.userId;
       const isOnline = onlineMembers.has(userId);
+
+      console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Processing member ${member.profile?.name} (${userId}): online=${isOnline}`);
+
+      // Add ALL members to role groups, regardless of online status
+      const targetGroupId = hoistedRole ? hoistedRole.id : 'ONLINE';
       
-      console.log(`[ENHANCED_MEMBER_SIDEBAR] Member ${member.profile?.name} (${userId}): isOnline=${isOnline}, hoistedRole=${hoistedRole?.name || 'none'}`);
-      
-      // Only show online members in role categories
-      if (isOnline) {
-        if (hoistedRole && roleGroups[hoistedRole.id]) {
-          // Member has a hoisted role and is online - put in role category
-          roleGroups[hoistedRole.id].members.push(member);
-          roleGroups[hoistedRole.id].onlineCount++;
-          console.log(`[ENHANCED_MEMBER_SIDEBAR] Added ${member.profile?.name} to role group ${hoistedRole.name}`);
-        } else {
-          // Member has no hoisted roles or only unhoisted roles - put in Online category
-          roleGroups['ONLINE'].members.push(member);
-          roleGroups['ONLINE'].onlineCount++;
-          console.log(`[ENHANCED_MEMBER_SIDEBAR] Added ${member.profile?.name} to Online group`);
+      if (roleGroups[targetGroupId]) {
+        roleGroups[targetGroupId].members.push(member);
+        // Only count online members for the header display
+        if (isOnline) {
+          roleGroups[targetGroupId].onlineCount += 1;
         }
-      } else {
-        console.log(`[ENHANCED_MEMBER_SIDEBAR] ${member.profile?.name} is not online, skipping`);
+        console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Added ${member.profile?.name} to group ${targetGroupId}`);
       }
     });
 
     // Filter out empty groups and sort by role position (highest first)
-    // Temporarily show all groups with members, regardless of online status
+    // Show ALL groups with members, regardless of online status
     const result = Object.values(roleGroups)
       .filter(group => group.members.length > 0)
       .sort((a, b) => b.role.position - a.role.position);
       
-    console.log(`[ENHANCED_MEMBER_SIDEBAR] Final role groups:`, result.map(g => ({ name: g.role.name, memberCount: g.members.length, onlineCount: g.onlineCount })));
+    console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Final role groups:`, result.map(g => ({ 
+      name: g.role.name, 
+      memberCount: g.members.length, 
+      onlineCount: g.onlineCount,
+      members: g.members.map((m: any) => m.profile?.name)
+    })));
     
     return result;
   };
@@ -269,57 +262,41 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
     <div className="flex flex-col h-full text-primary w-full bg-transparent border-l border-muted">      
       <ScrollArea className="flex-1 px-3 shadow-md dark:bg-black bg-white rounded-xl">
         <div className="mt-2 space-y-4">
-          {roleGroups.map((group) => (
-            <div key={group.role.id} className="space-y-2">
-              {/* Role Header */}
-              <div className="flex items-center gap-2 px-2 py-1">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: group.role.color }}
-                />
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  {group.role.name} — {group.onlineCount}
-                </span>
-              </div>
-              
-              {/* Members in this role */}
-              <div className="space-y-[2px]">
-                {group.members.map((member: any) => (
-                  <EnhancedServerMember
-                    key={member.id}
-                    member={member}
-                    profile={profile}
-                    server={server}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+          {roleGroups.map((group) => {
+            console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Rendering role group ${group.role.name} with ${group.members.length} members`);
 
-          {/* Offline Members Section */}
-          {members.some((member: any) => !onlineMembers.has(member.profile.userId)) && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 px-2 py-1">
-                <div className="w-3 h-3 rounded-full bg-gray-400" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Offline — {members.length - totalOnline}
-                </span>
+            return (
+              <div key={group.role.id} className="space-y-2">
+                {/* Role Header */}
+                <div className="flex items-center gap-2 px-2 py-1">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: group.role.color }}
+                  />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {group.role.name} — {group.onlineCount}
+                  </span>
+                </div>
+                
+                {/* All Members in this role */}
+                <div className="space-y-[2px]">
+                  {group.members.map((member: any) => {
+                    const isOnline = onlineMembers.has(member.profile?.userId);
+                    console.log(`[ENHANCED_MEMBER_SIDEBAR] ▶ Rendering member ${member.profile?.name}: online=${isOnline}`);
+                    
+                    return (
+                      <EnhancedServerMember
+                        key={member.id}
+                        member={member}
+                        profile={profile}
+                        server={server}
+                      />
+                    );
+                  })}
+                </div>
               </div>
-              
-              <div className="space-y-[2px]">
-                {members
-                  .filter((member: any) => !onlineMembers.has(member.profile.userId))
-                  .map((member: any) => (
-                    <EnhancedServerMember
-                      key={member.id}
-                      member={member}
-                      profile={profile}
-                      server={server}
-                    />
-                  ))}
-              </div>
-            </div>
-          )}
+            );
+          })}
         </div>
       </ScrollArea>
     </div>

@@ -208,7 +208,11 @@ export const ConversationChannel = ({
           </div>
           
           {/* Show partner's custom status for direct messages */}
-          {!lastMessage && type !== ConversationType.GROUP_MESSAGE && partnerPresenceStatus && (
+          {!lastMessage && type !== ConversationType.GROUP_MESSAGE && 
+           partnerPresenceStatus && 
+           partnerPresenceStatus.trim() !== "" && 
+           partnerPresenceStatus.trim() !== "undefined" && 
+           partnerPresenceStatus.trim() !== "null" && (
             <p className="text-xs text-zinc-400 dark:text-zinc-500 line-clamp-1">
               {partnerPresenceStatus}
             </p>

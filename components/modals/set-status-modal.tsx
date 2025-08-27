@@ -36,28 +36,15 @@ export const SetStatusModal = () => {
   const handleSetStatus = async () => {
     setIsLoading(true);
     try {
-      // Update presence status
-      await fetch("/api/socket/user-status", {
+      // Update both status and custom status in one call
+      await fetch("/api/user/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: selectedPresence }),
+        body: JSON.stringify({ 
+          status: selectedPresence,
+          presenceStatus: customStatus.trim() || null
+        }),
       });
-
-      // Update custom status via socket if provided
-      if (customStatus.trim()) {
-        await fetch("/api/socket/presence-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ presenceStatus: customStatus.trim() }),
-        });
-      } else {
-        // Clear custom status if empty
-        await fetch("/api/socket/presence-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ presenceStatus: null }),
-        });
-      }
 
       // Trigger members list update via websocket
       await fetch("/api/socket/poll-members", {
@@ -76,7 +63,7 @@ export const SetStatusModal = () => {
   const handleClearStatus = async () => {
     setIsLoading(true);
     try {
-      await fetch("/api/socket/presence-status", {
+      await fetch("/api/user/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ presenceStatus: null }),

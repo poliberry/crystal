@@ -7,6 +7,7 @@ import { appFileRouter } from "@/app/api/uploadthing/core";
 import { ModalProvider } from "@/components/providers/modal-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { SocketProvider } from "@/components/providers/socket-provider";
+import { PusherProvider } from "@/components/providers/pusher-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { NotificationProvider } from "@/components/providers/notification-provider";
 import { DNDProvider } from "@/components/providers/dnd-provider";
@@ -29,18 +30,20 @@ export const Providers = ({ children }: ProvidersProps) => {
         storageKey="discord-theme"
       >
         <SocketProvider>
-          <DNDProvider>
-            <NotificationProvider>
-              <NextSSRPlugin
-                routerConfig={extractRouterConfig(appFileRouter)}
-              />
-              <QueryProvider>
-                <PathTracker />
-                <ProgressProvider />
-                {children}
-              </QueryProvider>
-            </NotificationProvider>
-          </DNDProvider>
+          <PusherProvider>
+            <DNDProvider>
+              <NotificationProvider>
+                <NextSSRPlugin
+                  routerConfig={extractRouterConfig(appFileRouter)}
+                />
+                <QueryProvider>
+                  <PathTracker />
+                  <ProgressProvider />
+                  {children}
+                </QueryProvider>
+              </NotificationProvider>
+            </DNDProvider>
+          </PusherProvider>
         </SocketProvider>
       </ThemeProvider>
     </ClerkProvider>

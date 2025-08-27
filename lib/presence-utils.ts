@@ -1,90 +1,96 @@
 import { UserStatus } from "@prisma/client";
 
-export interface PresenceStatus {
+export interface DiscordPresence {
   status: UserStatus;
-  displayStatus: string;
+  customStatus?: string;
   isOnline: boolean;
+  displayText: string;
 }
 
 /**
- * Determine the correct presence status for a user
+ * Discord-like presence logic
+ * - INVISIBLE users appear as OFFLINE to others but maintain their actual status internally
+ * - Custom status is separate from online status
+ * - Users are "online" if their status is not OFFLINE or INVISIBLE
  */
-export function getPresenceStatus(
+export function getDiscordPresence(
   currentStatus: UserStatus | null,
-  prevStatus: UserStatus | null,
-  presenceStatus: string | null
-): PresenceStatus {
-  // If user has a custom presence status, use that
-  if (presenceStatus) {
-    return {
-      status: currentStatus || UserStatus.ONLINE,
-      displayStatus: presenceStatus,
-      isOnline: currentStatus !== UserStatus.OFFLINE && currentStatus !== UserStatus.INVISIBLE
-    };
-  }
-
-  // If no prevStatus is set and current status is OFFLINE, default to ONLINE
-  if (!prevStatus && currentStatus === UserStatus.OFFLINE) {
-    return {
-      status: UserStatus.ONLINE,
-      displayStatus: 'Online',
-      isOnline: true
-    };
-  }
-
-  // If prevStatus exists and current status is OFFLINE, use prevStatus
-  if (prevStatus && currentStatus === UserStatus.OFFLINE) {
-    return {
-      status: prevStatus,
-      displayStatus: getStatusDisplayName(prevStatus),
-      isOnline: prevStatus !== UserStatus.OFFLINE && prevStatus !== UserStatus.INVISIBLE
-    };
-  }
-
-  // Use current status
+  customStatus: string | null = null
+): DiscordPresence {
+  const status = currentStatus || UserStatus.OFFLINE;
+  
+  // Determine if user appears online to others
+  const isOnline = status !== UserStatus.OFFLINE && status !== UserStatus.INVISIBLE;
+  
+  // Get status display text
+  const statusText = getStatusDisplayText(status);
+  
+  // Clean up custom status - handle null, undefined, empty strings, and the string "undefined"
+  const cleanCustomStatus = customStatus && 
+    customStatus.trim() && 
+    customStatus.trim() !== '' && 
+    customStatus.trim() !== 'undefined' && 
+    customStatus.trim() !== 'null' 
+    ? customStatus.trim() 
+    : undefined;
+  
+  // Use custom status if available, otherwise use status text
+  const displayText = cleanCustomStatus || statusText;
+  
   return {
-    status: currentStatus || UserStatus.ONLINE,
-    displayStatus: getStatusDisplayName(currentStatus || UserStatus.ONLINE),
-    isOnline: (currentStatus || UserStatus.ONLINE) !== UserStatus.OFFLINE && 
-              (currentStatus || UserStatus.ONLINE) !== UserStatus.INVISIBLE
+    status: status === UserStatus.INVISIBLE ? UserStatus.OFFLINE : status, // INVISIBLE appears as OFFLINE to others
+    customStatus: cleanCustomStatus,
+    isOnline,
+    displayText
   };
 }
 
 /**
- * Get display name for status
+ * Get the display text for a status
  */
-export function getStatusDisplayName(status: UserStatus): string {
+export function getStatusDisplayText(status: UserStatus): string {
   switch (status) {
     case UserStatus.ONLINE:
-      return 'Online';
+      return "Online";
     case UserStatus.IDLE:
-      return 'Away';
+      return "Away";
     case UserStatus.DND:
-      return 'Do Not Disturb';
+      return "Do Not Disturb";
     case UserStatus.OFFLINE:
-      return 'Offline';
+      return "Offline";
     case UserStatus.INVISIBLE:
-      return 'Invisible';
+      return "Offline"; // INVISIBLE appears as offline to others
     default:
-      return 'Online';
+      return "Offline";
   }
 }
 
 /**
- * Get status color for UI
+ * Get the color for a status (for status indicators)
  */
 export function getStatusColor(status: UserStatus): string {
   switch (status) {
     case UserStatus.ONLINE:
-      return 'bg-green-500';
+      return "bg-green-500";
     case UserStatus.IDLE:
-      return 'bg-yellow-500';
+      return "bg-yellow-500";
     case UserStatus.DND:
-      return 'bg-red-500';
+      return "bg-red-500";
     case UserStatus.OFFLINE:
     case UserStatus.INVISIBLE:
-      return 'bg-gray-500';
+      return "bg-gray-500";
     default:
-      return 'bg-green-500';
+      return "bg-gray-500";
   }
+}
+
+/**
+ * Check if a user should appear in online member lists
+ */
+export function shouldShowInOnlineList(
+  status: UserStatus | null,
+  customStatus: string | null = null
+): boolean {
+  const presence = getDiscordPresence(status, customStatus);
+  return presence.isOnline;
 }

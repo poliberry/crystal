@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSocket } from "../providers/socket-provider";
 import { ServerMember } from "./server-member";
-import { getPresenceStatus } from "@/lib/presence-utils";
+import { getDiscordPresence } from "@/lib/presence-utils";
 import { UserStatus } from "@prisma/client";
 
 interface MemberSidebarClientProps {
@@ -24,9 +24,8 @@ export const MemberSidebarClient = ({ members: initialMembers, profile, server }
       setMembers(prevMembers => 
         prevMembers.map(member => {
           if (member.profile.id === data.profileId) {
-            const presenceInfo = getPresenceStatus(
+            const presence = getDiscordPresence(
               data.status,
-              member.profile.prevStatus,
               data.presenceStatus || member.profile.presenceStatus
             );
             
@@ -36,8 +35,8 @@ export const MemberSidebarClient = ({ members: initialMembers, profile, server }
                 ...member.profile,
                 status: data.status,
                 presenceStatus: data.presenceStatus || member.profile.presenceStatus,
-                displayStatus: presenceInfo.displayStatus,
-                isOnline: presenceInfo.isOnline
+                displayStatus: presence.customStatus,
+                isOnline: presence.isOnline
               }
             };
           }
@@ -51,9 +50,8 @@ export const MemberSidebarClient = ({ members: initialMembers, profile, server }
       setMembers(prevMembers => 
         prevMembers.map(member => {
           if (member.profile.id === data.profileId) {
-            const presenceInfo = getPresenceStatus(
+            const presence = getDiscordPresence(
               data.status,
-              data.prevStatus || member.profile.prevStatus,
               member.profile.presenceStatus
             );
             
@@ -63,8 +61,8 @@ export const MemberSidebarClient = ({ members: initialMembers, profile, server }
                 ...member.profile,
                 status: data.status,
                 prevStatus: data.prevStatus || member.profile.prevStatus,
-                displayStatus: presenceInfo.displayStatus,
-                isOnline: presenceInfo.isOnline
+                displayStatus: presence.customStatus,
+                isOnline: presence.isOnline
               }
             };
           }
@@ -100,9 +98,8 @@ export const MemberSidebarClient = ({ members: initialMembers, profile, server }
   useEffect(() => {
     setMembers(prevMembers => 
       prevMembers.map(member => {
-        const presenceInfo = getPresenceStatus(
+        const presence = getDiscordPresence(
           member.profile.status,
-          member.profile.prevStatus,
           member.profile.presenceStatus
         );
         
@@ -110,8 +107,8 @@ export const MemberSidebarClient = ({ members: initialMembers, profile, server }
           ...member,
           profile: {
             ...member.profile,
-            displayStatus: presenceInfo.displayStatus,
-            isOnline: presenceInfo.isOnline
+            displayStatus: presence.customStatus,
+            isOnline: presence.isOnline
           }
         };
       })

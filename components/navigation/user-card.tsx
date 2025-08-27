@@ -23,6 +23,8 @@ import { getLiveKitRoom } from "@/lib/LiveKitRoomManager";
 import { Badge } from "../ui/badge";
 import React, { useEffect, useRef, useState } from "react";
 import { Profile, UserStatus } from "@prisma/client";
+import { useStatusInitializer } from "@/hooks/use-status-initializer";
+import { usePresence } from "@/hooks/use-presence";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -44,7 +46,18 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   const { localParticipant } = useLocalParticipant();
   const livekit = useLiveKit();
   const { isDND, updateStatus } = useDND();
-  const [presence, setPresence] = useState<"ONLINE" | "IDLE" | "DND" | "OFFLINE">("ONLINE");
+  
+  // Use the enhanced presence system
+  useStatusInitializer({ profile });
+  const { status, presenceStatus, setStatus, loading } = usePresence({
+    initialStatus: profile?.status,
+    initialPresenceStatus: profile?.presenceStatus
+  });
+  
+  const [presence, setPresence] = useState<"ONLINE" | "IDLE" | "DND" | "OFFLINE">(() => {
+    if (status === UserStatus.INVISIBLE) return "OFFLINE";
+    return (status as "ONLINE" | "IDLE" | "DND" | "OFFLINE") || "ONLINE";
+  });
   const idleTimeout = useRef<NodeJS.Timeout | null>(null);
   const [showCallUi, setShowCallUi] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -52,34 +65,30 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
 
   const allParticipants = [localParticipant, ...remoteParticipants];
 
-  const setOnline = async (status: { presence: "ONLINE" | "IDLE" | "DND" | "OFFLINE" }) => {
-    setPresence(status.presence);
+  const setOnline = async (statusUpdate: { presence: "ONLINE" | "IDLE" | "DND" | "OFFLINE" }) => {
+    setPresence(statusUpdate.presence);
     if (idleTimeout.current) clearTimeout(idleTimeout.current);
-    // Update status using the DND context
+    
     try {
-      await updateStatus(status.presence);
+      // Use the new presence system for better persistence
+      await setStatus(statusUpdate.presence as UserStatus);
     } catch (error) {
       console.error("Failed to update user status:", error);
     }
   };
 
   useEffect(() => {
-    const setStatus = async () => {
-      const res = await fetch(`/api/user?userId=${profile?.id}`);
-      const profileData = await res.json();
-      setOnline({
-        presence:
-          (profileData?.prevStatus as "ONLINE" | "IDLE" | "DND" | "OFFLINE") || "ONLINE",
-      }); // Set to online on mount
-    };
-
-    setStatus();
+    // Initialize status from the presence hook
+    if (status) {
+      const mappedStatus = status === UserStatus.INVISIBLE ? "OFFLINE" : (status as "ONLINE" | "IDLE" | "DND" | "OFFLINE");
+      setPresence(mappedStatus);
+    }
 
     const handleUnload = () => {
       const blob = new Blob([JSON.stringify({ status: "OFFLINE" })], {
         type: "application/json",
       });
-      navigator.sendBeacon("/api/socket/user-status", blob);
+      navigator.sendBeacon("/api/user/status", blob);
     };
 
     socket.on("rtc:calls:start", (data: any) => {
@@ -102,7 +111,7 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
     return () => {
       window.removeEventListener("beforeunload", handleUnload);
     };
-  }, []);
+  }, [status]);
 
       function safeParseMetadata(raw?: string): { avatar?: string } | null {
         try {
