@@ -3,7 +3,7 @@
 import { useEffect, useCallback } from "react";
 import { useSocket } from "@/components/providers/socket-provider";
 import { usePresence } from "./use-presence";
-import { UserStatus } from "@prisma/client";
+import { UserStatus } from "@/lib/types";
 import axios from "axios";
 
 interface UseStatusInitializerProps {

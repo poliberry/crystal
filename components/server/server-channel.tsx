@@ -39,7 +39,7 @@ import { Avatar } from "@radix-ui/react-avatar";
 import { AvatarImage } from "../ui/avatar";
 import { useEffect, useState } from "react";
 import { SwitchVoiceChannelModal } from "../modals/switch-voice-channel-modal";
-import { useSocket } from "../providers/socket-provider";
+import { useSocket } from "../providers/pusher-provider";
 import { NotificationBadge } from "../notification-badge";
 import { UnreadDot } from "../unread-dot";
 import { PermissionType } from "@/types/permissions";

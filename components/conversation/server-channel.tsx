@@ -5,13 +5,11 @@ import {
   type Channel,
   MemberRole,
   type Server,
-  Conversation,
+  type Conversation,
   ConversationType,
-} from "@prisma/client";
+} from "@/lib/types";
 import { Edit, Hash, Lock, Mic, Trash, Video, GripVertical, Users, Phone, PhoneCall, Ellipsis } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import { ActionTooltip } from "@/components/action-tooltip";
 import { type ModalType, useModal } from "@/hooks/use-modal-store";
@@ -25,7 +23,7 @@ import { Avatar, AvatarFallback } from "../ui/avatar";
 import { AvatarImage } from "../ui/avatar";
 import { useEffect, useState } from "react";
 import { SwitchVoiceChannelModal } from "../modals/switch-voice-channel-modal";
-import { useSocket } from "../providers/socket-provider";
+import { useSocket } from "../providers/pusher-provider";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { NotificationBadge } from "../notification-badge";

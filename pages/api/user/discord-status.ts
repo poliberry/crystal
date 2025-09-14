@@ -31,32 +31,34 @@ export default async function handler(
         return res.status(400).json({ error: "Invalid status value" });
       }
 
-      // Build update data
-      const updateData: any = {};
+      // Track what changed
       let statusChanged = false;
       let presenceChanged = false;
+      let updatedProfile = profile;
 
       if (status && status !== profile.status) {
-        updateData.status = status;
-        updateData.prevStatus = profile.status;
-        statusChanged = true;
-      }
-
-      if (presenceStatus !== undefined && presenceStatus !== profile.presenceStatus) {
-        updateData.presenceStatus = presenceStatus || null;
-        presenceChanged = true;
-      }
-
-      // Update database if there are changes
-      let updatedProfile = profile;
-      if (Object.keys(updateData).length > 0) {
-        updatedProfile = await db.profile.update({
+        await db.profile.update({
           where: { id: profile.id },
-          data: updateData
+          data: { status: status }
         });
+        const newProfile = await db.profile.findUnique({
+          where: { id: profile.id }
+        });
+        if (newProfile) {
+          updatedProfile = newProfile;
+          statusChanged = true;
+        }
+      } else if (presenceStatus !== undefined && presenceStatus !== profile.presence_status) {
+        const newProfile = await db.profile.update({
+          where: { id: profile.id },
+          data: { presenceStatus: presenceStatus }
+        });
+        if (newProfile) {
+          updatedProfile = newProfile;
+          presenceChanged = true;
+        }
       }
 
-      // Emit websocket events for real-time updates
       // Emit real-time updates via Pusher
       if (statusChanged || presenceChanged) {
         try {
@@ -76,7 +78,7 @@ export default async function handler(
 
           console.log(`[DISCORD_STATUS_API] Updated presence via Pusher for ${profile.userId}:`, {
             status: profile.status + " -> " + updatedProfile.status,
-            presenceStatus: profile.presenceStatus + " -> " + updatedProfile.presenceStatus
+            presenceStatus: (profile.presenceStatus || "") + " -> " + (updatedProfile.presenceStatus || "")
           });
         } catch (pusherError) {
           console.error("[PUSHER_ERROR] Failed to emit discord status update:", pusherError);

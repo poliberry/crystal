@@ -23,7 +23,7 @@ import { ActionTooltip } from "../action-tooltip";
 import { UserAvatar } from "../user-avatar";
 import { MediaEmbed, isSocialEmbed } from "./media-embed";
 import { utapi } from "@/app/api/uploadthing/route";
-import { useSocket } from "../providers/socket-provider";
+import { useSocket } from "../providers/pusher-provider";
 
 type ChatItemProps = {
   id: string;

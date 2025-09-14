@@ -38,21 +38,29 @@ export default async function handler(
 
       const { status, presenceStatus } = req.body;
 
-      const updateData: any = {};
+      // Prepare update data
+      let updatedProfile = profile;
       
       if (status && Object.values(UserStatus).includes(status)) {
-        updateData.prevStatus = profile.status;
-        updateData.status = status;
+        await db.profile.update({
+          where: { id: profile.id },
+          data: { status: status }
+        });
+        updatedProfile = await db.profile.findUnique({
+          where: { id: profile.id }
+        });
+        if (!updatedProfile) {
+          throw new Error("Failed to update profile");
+        }
+      } else if (presenceStatus !== undefined) {
+        updatedProfile = await db.profile.update({
+          where: { id: profile.id },
+          data: { presenceStatus: presenceStatus }
+        });
+        if (!updatedProfile) {
+          throw new Error("Failed to update profile");
+        }
       }
-
-      if (presenceStatus !== undefined) {
-        updateData.presenceStatus = presenceStatus || null;
-      }
-
-      const updatedProfile = await db.profile.update({
-        where: { id: profile.id },
-        data: updateData
-      });
 
       // Emit real-time updates via Pusher
       try {
@@ -65,11 +73,11 @@ export default async function handler(
             prevStatus: updatedProfile.prevStatus,
           });
           
-          console.log(`[PUSHER_STATUS_UPDATE] User ${profile.userId} status changed from ${profile.status} to ${updatedProfile.status}`);
+          console.log(`[PUSHER_STATUS_UPDATE] User ${profile.user_id} status changed from ${profile.status} to ${updatedProfile.status}`);
         }
 
         // Only emit presence update if presence status actually changed
-        if (presenceStatus !== undefined && presenceStatus !== profile.presenceStatus) {
+        if (presenceStatus !== undefined && presenceStatus !== profile.presence_status) {
           await pusherServer.trigger("presence", "user:presence:update", {
             userId: profile.userId,
             presenceStatus: updatedProfile.presenceStatus,
@@ -77,11 +85,11 @@ export default async function handler(
             prevStatus: updatedProfile.prevStatus,
           });
           
-          console.log(`[PUSHER_PRESENCE_UPDATE] User ${profile.userId} presence changed from ${profile.presenceStatus} to ${updatedProfile.presenceStatus}`);
+          console.log(`[PUSHER_PRESENCE_UPDATE] User ${profile.user_id} presence changed from ${profile.presence_status} to ${updatedProfile.presence_status}`);
         }
 
         // Only emit the combined update if either status changed
-        if ((status && status !== profile.status) || (presenceStatus !== undefined && presenceStatus !== profile.presenceStatus)) {
+        if ((status && status !== profile.status) || (presenceStatus !== undefined && presenceStatus !== profile.presence_status)) {
           await pusherServer.trigger("presence", "presence-status-update", {
             profileId: profile.id,
             userId: profile.userId,

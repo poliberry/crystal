@@ -1,21 +1,9 @@
 "use client";
 
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
 import { ConversationChannel } from "./server-channel";
 import { ServerSection } from "./server-section";
 import { useRouter } from "next/navigation";
-import { ConversationType } from "@prisma/client";
+import { ConversationType } from "@/lib/types";
 
 type ServerChannelListProps = {
   conversations: any[];

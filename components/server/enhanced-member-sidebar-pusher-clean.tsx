@@ -1,9 +1,10 @@
 "use client";
 
+import { ChannelType, MemberRole } from "@prisma/client";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video, Crown, Users } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { usePusher } from "../providers/pusher-provider";
-import { UserStatus, MemberRole, ChannelType } from "@/lib/types";
+import { UserStatus } from "@prisma/client";
 import { getDiscordPresence, shouldShowInOnlineList } from "@/lib/presence-utils";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,22 +56,21 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
   const [members, setMembers] = useState(initialData?.members || []);
   const [profile] = useState(currentProfile);
   
-  // Online members tracking - using array for reliable React updates
-  const [onlineMemberIds, setOnlineMemberIds] = useState<string[]>([]);
+  // Online members tracking
+  const [onlineMembers, setOnlineMembers] = useState<Set<string>>(new Set());
 
   // Initialize online members on mount
   useEffect(() => {
-    const initialOnlineMembers: string[] = [];
+    const initialOnlineMembers = new Set<string>();
     
     members.forEach((member: any) => {
-      const userId = member.profile?.user_id;
-      if (userId && shouldShowInOnlineList(member.profile?.status, member.profile?.presence_status)) {
-        initialOnlineMembers.push(userId);
+      const userId = member.profile?.userId;
+      if (userId && shouldShowInOnlineList(member.profile?.status, member.profile?.presenceStatus)) {
+        initialOnlineMembers.add(userId);
       }
     });
     
-    setOnlineMemberIds(initialOnlineMembers);
-    console.log(`[DEBUG] Initialized online members:`, initialOnlineMembers);
+    setOnlineMembers(initialOnlineMembers);
   }, [members]);
 
   // Pusher event handlers
@@ -80,20 +80,18 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
     const presenceChannel = pusher.subscribe(`presence-server-${serverId}`);
     
     const handleUserStatusUpdate = (data: any) => {
-      console.log(`[DEBUG] Received status update:`, data);
       if (!data.userId) return;
       
       // Update member data
       setMembers((prevMembers: any[]) => 
         prevMembers.map((member: any) => {
-          if (member.profile?.user_id === data.userId) {
-            console.log(`[DEBUG] Updating ${member.profile?.name} status: ${member.profile?.status} -> ${data.status}`);
+          if (member.profile?.userId === data.userId) {
             return {
               ...member,
               profile: {
                 ...member.profile,
                 status: data.status,
-                presence_status: data.presenceStatus || data.status
+                presenceStatus: data.presenceStatus || data.status
               }
             };
           }
@@ -107,24 +105,14 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
         data.presenceStatus || data.status
       );
       
-      console.log(`[DEBUG] User ${data.userId} should be online: ${shouldBeOnline}`);
-      
-      setOnlineMemberIds(prev => {
-        const newArray = [...prev];
+      setOnlineMembers(prev => {
+        const newSet = new Set(prev);
         if (shouldBeOnline) {
-          if (!newArray.includes(data.userId)) {
-            newArray.push(data.userId);
-            console.log(`[DEBUG] Added ${data.userId} to online members`);
-          }
+          newSet.add(data.userId);
         } else {
-          const index = newArray.indexOf(data.userId);
-          if (index > -1) {
-            newArray.splice(index, 1);
-            console.log(`[DEBUG] Removed ${data.userId} from online members`);
-          }
+          newSet.delete(data.userId);
         }
-        console.log(`[DEBUG] Online members now:`, newArray);
-        return newArray;
+        return newSet;
       });
     };
 
@@ -144,8 +132,6 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
 
   // Group members by role hierarchy
   const groupedMembers = useMemo(() => {
-    console.log(`[DEBUG] useMemo re-running with ${onlineMemberIds.length} online members:`, onlineMemberIds);
-    
     const roleGroups: Record<string, RoleGroup> = {};
     
     // Initialize hoisted role groups
@@ -186,11 +172,9 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
 
     // Assign members to appropriate groups
     members.forEach((member: any) => {
-      const userId = member.profile?.user_id;
-      const isOnline = onlineMemberIds.includes(userId);
+      const userId = member.profile?.userId;
+      const isOnline = onlineMembers.has(userId);
       const memberRoles = member.roles || [];
-      
-      console.log(`[DEBUG] Processing member ${member.profile?.name}: online=${isOnline}, status=${member.profile?.status}, roles=`, memberRoles.map((r: any) => r.name));
       
       // Find highest hoisted role
       const hoistedRole = memberRoles
@@ -202,11 +186,9 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
       if (hoistedRole) {
         // Member has a hoisted role
         targetGroupId = hoistedRole.id;
-        console.log(`[DEBUG] ${member.profile?.name} assigned to hoisted role: ${hoistedRole.name}`);
       } else {
         // Member has no hoisted roles, group by online status
         targetGroupId = isOnline ? 'ONLINE' : 'OFFLINE';
-        console.log(`[DEBUG] ${member.profile?.name} assigned to special group: ${targetGroupId}`);
       }
 
       if (roleGroups[targetGroupId]) {
@@ -219,22 +201,16 @@ export const EnhancedMemberSidebar = ({ serverId, initialData, currentProfile }:
       .filter(group => group.members.length > 0)
       .sort((a, b) => b.role.position - a.role.position);
 
-    console.log(`[DEBUG] Final grouped result:`, result.map(g => ({ 
-      name: g.role.name, 
-      memberCount: g.members.length,
-      memberNames: g.members.map((m: any) => m.profile?.name)
-    })));
-
     return result;
-  }, [members, onlineMemberIds, server?.roles]);
+  }, [members, onlineMembers, server?.roles]);
 
   // Separate online and offline members within hoisted role groups
   const renderRoleGroup = (group: RoleGroup) => {
     const onlineInGroup = group.members.filter((member: any) => 
-      onlineMemberIds.includes(member.profile?.user_id)
+      onlineMembers.has(member.profile?.userId)
     );
     const offlineInGroup = group.members.filter((member: any) => 
-      !onlineMemberIds.includes(member.profile?.user_id)
+      !onlineMembers.has(member.profile?.userId)
     );
 
     const isSpecialGroup = group.role.id === 'ONLINE' || group.role.id === 'OFFLINE';

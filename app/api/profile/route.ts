@@ -9,7 +9,9 @@ export async function GET(req: Request) {
   }
 
   const profile = await db.profile.findUnique({
-    where: { id: user.id },
+    where: {
+      id: user.id,
+    },
   });
 
   if (!profile) {

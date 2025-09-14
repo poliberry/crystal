@@ -1,4 +1,4 @@
-import { PermissionType, PermissionScope, PermissionGrantType } from "@prisma/client";
+import { PermissionType, PermissionScope, PermissionGrantType } from "@/lib/types";
 
 // Re-export Prisma enums for convenience
 export { PermissionType, PermissionScope, PermissionGrantType };

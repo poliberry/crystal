@@ -19,7 +19,17 @@ export default async function handler(
 
     const { socket_id, channel_name } = req.body;
 
-    // Authorize the user for the private channel
+    console.log("[PUSHER_AUTH] Received auth request:", { socket_id, channel_name, body: req.body });
+
+    if (!socket_id) {
+      console.error("[PUSHER_AUTH] Missing socket_id");
+      return res.status(400).json({ message: "Missing socket_id" });
+    }
+
+    if (!channel_name) {
+      console.error("[PUSHER_AUTH] Missing channel_name");
+      return res.status(400).json({ message: "Missing channel_name" });
+    }
     const authResponse = pusherServer.authorizeChannel(socket_id, channel_name, {
       user_id: profile.userId,
       user_info: {

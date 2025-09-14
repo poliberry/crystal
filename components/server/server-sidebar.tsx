@@ -137,7 +137,7 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
         member={currentMember}
         canManageChannels={canManageChannels.granted}
       />
-      <ScrollArea className="flex-1 px-3 dark:bg-black bg-white pt-4 -mt-4">
+      <ScrollArea className="flex-1 px-3 backdrop-blur-2xl bg-white/20 dark:bg-black/20 pt-4 -mt-4">
         <div className="mt-2">
           <ServerSearch
             data={[

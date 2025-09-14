@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { useUser } from "@clerk/nextjs";
 import { disconnectLiveKitRoom } from "@/lib/LiveKitRoomManager";
 import { useLiveKit } from "./providers/media-room-provider";
-import { useSocket } from "./providers/socket-provider";
+import { useSocket } from "./providers/pusher-provider";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 // Floating UI component to persist across tab views

@@ -205,7 +205,7 @@ export const UserSettingsModal = () => {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold mb-4">My Account</h3>
+              <h3 className="text-xl font-semibold mb-4 headerFont">My Account</h3>
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-20 h-20 rounded-full">
@@ -292,6 +292,7 @@ export const UserSettingsModal = () => {
                         <Input
                           {...field}
                           placeholder="Enter your display name"
+                          required={false}
                         />
                       </FormControl>
                       <FormMessage />
@@ -306,7 +307,7 @@ export const UserSettingsModal = () => {
                     <FormItem>
                       <FormLabel>Username</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Enter your username" />
+                        <Input {...field} placeholder="Enter your username" disabled />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -320,7 +321,7 @@ export const UserSettingsModal = () => {
                     <FormItem>
                       <FormLabel>Pronouns</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="e.g., they/them" />
+                        <Input {...field} placeholder="e.g., they/them" required={false} />
                       </FormControl>
                       <FormDescription>
                         Let others know how to refer to you.
@@ -340,6 +341,7 @@ export const UserSettingsModal = () => {
                         <Input
                           {...field}
                           placeholder="Enter your banner image URL"
+                          required={false}
                         />
                       </FormControl>
                       <FormDescription>
@@ -363,6 +365,7 @@ export const UserSettingsModal = () => {
                           placeholder="Tell others about yourself..."
                           className="resize-none"
                           rows={3}
+                          required={false}
                         />
                       </FormControl>
                       <FormDescription>
@@ -473,7 +476,7 @@ export const UserSettingsModal = () => {
             <div>
               <h3 className="text-xl font-semibold mb-2">Appearance</h3>
               <p className="text-muted-foreground mb-6">
-                Customize how Discord looks for you.
+                Customize how Crystal looks for you.
               </p>
             </div>
 
@@ -800,7 +803,7 @@ export const UserSettingsModal = () => {
         {settingsTabs.map((tab) => {
           const showCategory = tab.category && tab.category !== currentCategory;
           if (showCategory) {
-            currentCategory = tab.category;
+            currentCategory = tab.category || "";
           }
 
           return (
@@ -836,12 +839,12 @@ export const UserSettingsModal = () => {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 overflow-hidden max-w-6xl h-[80vh]">
+      <DialogContent className="p-0 overflow-hidden max-w-full h-full rounded-none border-none">
         <div className="flex flex-row w-full h-full">
           {/* Sidebar */}
-          <div className="flex flex-col w-1/4 p-4 border-r border-border bg-muted/20">
+          <div className="flex flex-col w-1/4 p-4 border-r border-border bg-gradient-to-b from-white dark:from-black to-blue-300 dark:to-[#000226]">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">User Settings</h2>
+              <h2 className="text-lg font-semibold headerFont uppercase">User Settings</h2>
             </div>
             <div className="flex-1 overflow-y-auto">{renderSidebar()}</div>
             <div className="pt-4 border-t border-border">
@@ -855,7 +858,7 @@ export const UserSettingsModal = () => {
           </div>
 
           {/* Content */}
-          <div className="flex-1 p-6 overflow-y-auto">{renderTabContent()}</div>
+          <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-black">{renderTabContent()}</div>
         </div>
       </DialogContent>
     </Dialog>

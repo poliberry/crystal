@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { Profile, UserStatus } from "@prisma/client";
+import { Profile, UserStatus } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 import { useLiveKit } from "./providers/media-room-provider";
-import { useSocket } from "./providers/socket-provider";
+import { useSocket } from "./providers/pusher-provider";
 
 interface UserDialogProps {
   children: React.ReactNode;
@@ -45,19 +45,21 @@ interface UserDialogProps {
   mode?: "popup" | "dialog";
 }
 
-interface UserProfileData extends Profile {
+interface UserProfileData {
+  id: string;
+  userId: string;
   name: string;
-  bio: string | null;
+  globalName: string;
+  imageUrl: string;
+  bannerUrl: string;
+  bio: string;
+  email: string;
+  status: UserStatus;
+  createdAt: Date;
+  updatedAt: Date;
   pronouns: string | null;
-  globalName: string | null;
-  bannerUrl: string | null;
-  servers?: {
-    id: string;
-    name: string;
-    role: string;
-  }[];
-  memberSince?: Date;
-  mutualServers?: number;
+  presenceStatus: string | null;
+  memberSince?: Date | null;
 }
 
 export function UserDialog({
@@ -203,8 +205,8 @@ export function UserDialog({
           conversationId: conversation.id,
           type: "voice",
           callerId: currentProfile.id,
-          callerName: currentProfile.globalName || currentProfile.name,
-          callerAvatar: currentProfile.imageUrl,
+          callerName: currentProfile.global_name || currentProfile.name,
+          callerAvatar: currentProfile.image_url,
           participantIds: conversation.members?.map(
             (m: any) => m.member.profile.id
           ) || [profileId],
@@ -248,8 +250,8 @@ export function UserDialog({
           conversationId: conversation.id,
           type: "video",
           callerId: currentProfile.id,
-          callerName: currentProfile.globalName || currentProfile.name,
-          callerAvatar: currentProfile.imageUrl,
+          callerName: currentProfile.global_name || currentProfile.name,
+          callerAvatar: currentProfile.image_url,
           participantIds: conversation.members?.map(
             (m: any) => m.member.profile.id
           ) || [profileId],
@@ -312,16 +314,16 @@ export function UserDialog({
                   />
                 </div>
               </div>
-              {displayProfile?.presenceStatus && 
-               displayProfile.presenceStatus.trim() !== "" && 
-               displayProfile.presenceStatus.trim() !== "undefined" && 
-               displayProfile.presenceStatus.trim() !== "null" && (
-                <div className="bg-background border border-border rounded-lg px-3 py-2 z-[10] shadow-sm max-w-48 mt-10">
-                  <p className="text-sm text-foreground truncate">
-                    {displayProfile.presenceStatus}
-                  </p>
-                </div>
-              )}
+              {displayProfile?.presenceStatus &&
+                displayProfile.presenceStatus.trim() !== "" &&
+                displayProfile.presenceStatus.trim() !== "undefined" &&
+                displayProfile.presenceStatus.trim() !== "null" && (
+                  <div className="bg-background border border-border rounded-lg px-3 py-2 z-[10] shadow-sm max-w-48 mt-10">
+                    <p className="text-sm text-foreground truncate">
+                      {displayProfile.presenceStatus}
+                    </p>
+                  </div>
+                )}
             </div>
 
             <div className="min-w-0">
@@ -330,7 +332,7 @@ export function UserDialog({
                 {displayProfile?.globalName || displayProfile?.name}
               </h3>
               <p className="text-xs text-muted-foreground truncate">
-                @{displayProfile?.name} | {displayProfile?.pronouns || ""}
+                @{displayProfile?.name} {displayProfile?.pronouns ? `| ${displayProfile?.pronouns}` : ""}
               </p>
             </div>
 
@@ -347,8 +349,7 @@ export function UserDialog({
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-muted-foreground">
-                  Joined{" "}
-                  {dayjs(displayProfile?.createdAt).format("MMM YYYY")}
+                  Joined {dayjs(displayProfile?.createdAt).format("MMM YYYY")}
                 </span>
               </div>
             </div>
@@ -458,16 +459,16 @@ export function UserDialog({
             </div>
 
             {/* Custom Status Bubble */}
-            {displayProfile?.presenceStatus && 
-             displayProfile.presenceStatus.trim() !== "" && 
-             displayProfile.presenceStatus.trim() !== "undefined" && 
-             displayProfile.presenceStatus.trim() !== "null" && (
-              <div className="bg-background border border-border rounded-lg px-3 py-2 shadow-sm max-w-48 mt-2">
-                <p className="text-sm text-foreground truncate">
-                  {displayProfile.presenceStatus}
-                </p>
-              </div>
-            )}
+            {displayProfile?.presenceStatus &&
+              displayProfile.presenceStatus.trim() !== "" &&
+              displayProfile.presenceStatus.trim() !== "undefined" &&
+              displayProfile.presenceStatus.trim() !== "null" && (
+                <div className="bg-background border border-border rounded-lg px-3 py-2 shadow-sm max-w-48 mt-2">
+                  <p className="text-sm text-foreground truncate">
+                    {displayProfile.presenceStatus}
+                  </p>
+                </div>
+              )}
           </div>
         </div>
 
@@ -512,8 +513,7 @@ export function UserDialog({
               <span className="text-muted-foreground">
                 Member since{" "}
                 {dayjs(
-                  displayProfile?.memberSince ||
-                    displayProfile?.createdAt
+                  displayProfile?.memberSince || displayProfile?.createdAt
                 ).format("MMM DD, YYYY")}
               </span>
             </div>
@@ -524,24 +524,6 @@ export function UserDialog({
                 Joined{" "}
                 {dayjs(displayProfile?.createdAt).format("MMM DD, YYYY")}
               </span>
-            </div>
-          </div>
-
-          {/* Server Roles - Always show with dummy data */}
-          <div>
-            <h3 className="text-sm font-semibold mb-2">Roles</h3>
-            <div className="flex flex-wrap gap-1">
-              {(displayProfile?.servers || []).map((server) => (
-                <Badge key={server.id} variant="secondary" className="text-xs">
-                  {server.role === "ADMIN" && (
-                    <Shield className="h-3 w-3 mr-1" />
-                  )}
-                  {server.role === "MODERATOR" && (
-                    <Crown className="h-3 w-3 mr-1" />
-                  )}
-                  {server.role.charAt(0) + server.role.slice(1).toLowerCase()}
-                </Badge>
-              ))}
             </div>
           </div>
 

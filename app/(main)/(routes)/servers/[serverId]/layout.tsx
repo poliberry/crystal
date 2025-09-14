@@ -46,7 +46,7 @@ const ServerIdLayout = async ({
   if (!server) redirect("/");
 
   return (
-    <div className="h-full flex flex-row overflow-hidden pointer-events-auto">
+    <div className="h-full flex flex-row overflow-hidden pointer-events-auto bg-gradient-to-b from-black to-[#000226]">
       <aside className="md:flex h-full w-96 flex-col inset-y-0 z-[10]">
         <ServerSidebar serverId={params.serverId} />
       </aside>

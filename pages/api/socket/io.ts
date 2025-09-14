@@ -2,7 +2,7 @@ import type { Server as NetServer } from "http";
 import type { NextApiRequest } from "next";
 import { Server as ServerIO } from "socket.io";
 import { db } from "@/lib/db";
-import { ConversationType } from "@prisma/client";
+import { ConversationType } from "@/lib/types";
 
 import type { NextApiResponseServerIo } from "@/types";
 
