@@ -20,7 +20,7 @@ export const initialProfile = async () => {
 
     const newProfile = await db.profile.create({
       data: {
-        userId: user.id,
+        userId: crypto.randomUUID(),
         name: `${user.username}`,
         imageUrl: user.imageUrl,
         email: user.emailAddresses[0].emailAddress,
