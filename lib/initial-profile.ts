@@ -4,14 +4,15 @@ import { db } from "./db";
 
 export const initialProfile = async () => {
   try {
-    const user = await auth();
+    const { userId } = await auth();
+    const user = await currentUser();
 
-    if (!user)
+    if (!userId)
       return redirectToSignIn();
 
     const profile = await db.profile.findUnique({
       where: {
-        userId: user.userId as string,
+        userId: userId as string,
       },
     });
 
@@ -20,10 +21,10 @@ export const initialProfile = async () => {
 
     const newProfile = await db.profile.create({
       data: {
-        userId: user.userId as string,
-        name: `${user.user?.username}`,
-        imageUrl: `${user.user?.imageUrl}`,
-        email: `${user.user?.emailAddresses[0].emailAddress}`,
+        userId: userId,
+        name: `${user?.username}`,
+        imageUrl: `${user?.imageUrl}`,
+        email: `${user?.emailAddresses[0].emailAddress}`,
       },
     });
 
