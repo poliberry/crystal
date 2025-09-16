@@ -153,10 +153,10 @@ export const EnhancedServerMember = ({ member, profile, server }: ServerMemberPr
         </div>
         
         <div className="flex flex-col items-start min-w-0 flex-1">
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex items-center gap-0 w-full">
             <p 
               className={cn(
-                "font-semibold text-sm truncate",
+                "font-semibold text-sm truncate w-full text-left",
                 "transition-colors"
               )}
               style={{ 
