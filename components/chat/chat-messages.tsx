@@ -11,7 +11,7 @@ import { useChatScroll } from "@/hooks/use-chat-scroll";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useNotifications } from "@/hooks/use-notifications";
-import type { MessageWithMemberWithProfile } from "@/types";
+import type { MessageWithMemberWithProfile, DirectMessageWithProfile } from "@/types";
 
 import { ChatItem } from "./chat-item";
 import { ChatWelcome } from "./chat-welcome";
@@ -187,6 +187,7 @@ export const ChatMessages = ({
                       <ChatItem
                         currentMember={member}
                         member={message.member}
+                        profile={(message as any).profile}
                         id={message.id}
                         content={message.content}
                         attachments={message.attachments}

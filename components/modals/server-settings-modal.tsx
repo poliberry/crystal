@@ -325,6 +325,7 @@ export const ServerSettingsModal = () => {
   return (
     <Dialog open={isModalOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0">
+        <DialogTitle className="hidden">Server Settings</DialogTitle>
         <DialogHeader className="pt-6 px-6 pb-0">
           <DialogTitle className="text-2xl font-bold flex items-center gap-2">
             <Settings className="h-6 w-6" />
