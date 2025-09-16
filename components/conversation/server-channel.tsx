@@ -220,7 +220,7 @@ export const ConversationChannel = ({
           {lastMessage && (
             <div className="flex items-center justify-between w-full">
               <p className="text-xs text-zinc-400 dark:text-zinc-500 line-clamp-1 flex-1">
-                <span className="font-medium">{lastMessage.member.profile.name}:</span> {lastMessage.content}
+                <span className="font-medium">{lastMessage.profile.name}:</span> {lastMessage.content}
               </p>
               <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0">
                 {formatMessageTime(lastMessage.createdAt)}

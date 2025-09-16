@@ -28,7 +28,7 @@ import { Badge } from "../ui/badge";
 import React, { useEffect, useRef, useState } from "react";
 import { Profile, UserStatus } from "@/lib/types";
 import { useStatusInitializer } from "@/hooks/use-status-initializer";
-import { usePresence } from "@/hooks/use-presence";
+import { useStatus } from "@/components/providers/status-provider";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -52,12 +52,8 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   const livekit = useLiveKit();
   const { isDND, updateStatus } = useDND();
 
-  // Use the enhanced presence system
-  useStatusInitializer({ profile });
-  const { status, presenceStatus, setStatus, loading } = usePresence({
-    initialStatus: profile?.status,
-    initialPresenceStatus: profile?.presenceStatus,
-  });
+  // Use the enhanced status system
+  const { status, customStatus, setStatus, loading } = useStatus();
 
   const [presence, setPresence] = useState<
     "ONLINE" | "IDLE" | "DND" | "OFFLINE"
@@ -87,7 +83,7 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   };
 
   useEffect(() => {
-    // Initialize status from the presence hook
+    // Initialize status mapping from the status provider
     if (status) {
       const mappedStatus =
         status === UserStatus.INVISIBLE
@@ -248,7 +244,7 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
               {profile.name}
             </span>
             <div className="text-[10.5px] text-muted-foreground truncate">
-              {presenceMap[presence].text}
+              {customStatus || presenceMap[presence].text}
             </div>
           </div>
         </div>

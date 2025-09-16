@@ -1,12 +1,12 @@
 import { currentProfilePages } from "@/lib/current-profile-pages";
 import { db } from "@/lib/db";
-import { NextApiResponseServerIo } from "@/types";
-import { NextApiRequest } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import { UserStatus } from "@prisma/client";
+import { pusherServer } from "@/lib/pusher";
 
 export default async function handler(
     req: NextApiRequest,
-    res: NextApiResponseServerIo,
+    res: NextApiResponse,
 ) {
     if (req.method !== "POST") {
         return res.status(405).json({ error: "Method not allowed." });
@@ -52,27 +52,28 @@ export default async function handler(
 
         // Only emit if status actually changed
         if (status !== currentProfile.status) {
-            // Emit the updated user status to all connected clients with enhanced data
-            res?.socket?.server?.io?.emit("user:status:update", {
-                userId: profile.userId,
-                status: status as UserStatus,
-                presenceStatus: currentProfile.presenceStatus,
-                prevStatus: profile.status as UserStatus,
-            });
+            try {
+                // Emit the updated user status to all connected clients with enhanced data
+                const eventData = {
+                    userId: profile.userId,
+                    status: status as UserStatus,
+                    presenceStatus: currentProfile.presenceStatus,
+                    prevStatus: profile.status as UserStatus,
+                };
 
-            // Also emit combined update
-            res?.socket?.server?.io?.emit("presence-status-update", {
-                profileId: profile.id,
-                userId: profile.userId,
-                status: status as UserStatus,
-                presenceStatus: currentProfile.presenceStatus,
-                prevStatus: profile.status as UserStatus,
-            });
+                // Emit multiple events for compatibility
+                await pusherServer.trigger("presence", "user:status:update", eventData);
+                await pusherServer.trigger("presence", "presence-status-update", {
+                    profileId: profile.id,
+                    ...eventData,
+                });
+                await pusherServer.trigger("presence", "members:poll", { timestamp: Date.now() });
 
-            // Trigger member list updates
-            res?.socket?.server?.io?.emit("members:poll");
-
-            console.log(`[SOCKET_STATUS_UPDATE] User ${profile.userId} status changed from ${profile.status} to ${status}`);
+                console.log(`[PUSHER_STATUS_UPDATE] User ${profile.userId} status changed from ${profile.status} to ${status}`);
+            } catch (pusherError) {
+                console.error("[PUSHER_ERROR] Failed to emit status update:", pusherError);
+                // Don't fail the request if Pusher fails
+            }
         }
 
         return res.status(200).json({ message: "User status updated successfully." });
