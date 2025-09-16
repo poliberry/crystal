@@ -180,43 +180,35 @@ export const PusherProvider = ({
       }
     });
 
-    // Subscribe to user-specific channels when profile ID is available
-    let userChannel: any = null;
-    let pageContextChannel: any = null;
-
-    if (currentProfileId) {
-      console.log("[PUSHER] Subscribing to private channels for profile:", currentProfileId);
-      console.log("[PUSHER] Connection state:", pusherClient.connection.state);
-      console.log("[PUSHER] Socket ID:", pusherClient.connection.socket_id);
-
-      // Subscribe to user-specific channel
-      userChannel = pusherClient.subscribe(`private-user-${currentProfileId}`);
-
-      // Subscribe to page context channel
-      pageContextChannel = pusherClient.subscribe(`private-page-context-${currentProfileId}`);
-
-      pageContextChannel.bind("page:context:update", (pageInfo: any) => {
-        // Handle page context updates
-        console.log("Page context updated:", pageInfo);
-      });
-    }
-
     // Connect to Pusher
     if (pusherClient.connection.state !== "connected") {
       pusherClient.connect();
     }
 
     return () => {
-      if (userChannel && currentProfileId) {
-        pusherClient.unsubscribe(`private-user-${currentProfileId}`);
-      }
-      if (pageContextChannel && currentProfileId) {
-        pusherClient.unsubscribe(`private-page-context-${currentProfileId}`);
-      }
       pusherClient.unsubscribe("presence-global");
       pusherClient.disconnect();
     };
   }, []);
+
+  // Subscribe to private channels when profile becomes available and we're connected
+  useEffect(() => {
+    if (currentProfileId && isConnected && pusherClient.connection.socket_id) {
+      console.log("[PUSHER] Profile available, subscribing to private channels");
+      
+      const userChannel = pusherClient.subscribe(`private-user-${currentProfileId}`);
+      const pageContextChannel = pusherClient.subscribe(`private-page-context-${currentProfileId}`);
+
+      pageContextChannel.bind("page:context:update", (pageInfo: any) => {
+        console.log("Page context updated:", pageInfo);
+      });
+
+      return () => {
+        pusherClient.unsubscribe(`private-user-${currentProfileId}`);
+        pusherClient.unsubscribe(`private-page-context-${currentProfileId}`);
+      };
+    }
+  }, [currentProfileId, isConnected]);
 
   return (
     <PusherContext.Provider value={{ socket: socketInterface, pusher: pusherClient, isConnected }}>

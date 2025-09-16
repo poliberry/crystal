@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
               profile: true,
             },
           },
+          profile: true, // Include profile directly for profile-based messages
+          attachments: true, // Include attachments
         },
         orderBy: {
           createdAt: "desc",
@@ -53,6 +55,8 @@ export async function GET(req: NextRequest) {
               profile: true,
             },
           },
+          profile: true, // Include profile directly for profile-based messages
+          attachments: true, // Include attachments
         },
         orderBy: {
           createdAt: "desc",
