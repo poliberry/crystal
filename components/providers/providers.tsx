@@ -12,6 +12,7 @@ import { NotificationProvider } from "@/components/providers/notification-provid
 import { DNDProvider } from "@/components/providers/dnd-provider";
 import { PathTracker } from "@/components/providers/path-tracker-provider";
 import { ProgressProvider } from "@/components/progress-bar";
+import { StatusProvider } from "@/components/providers/status-provider";
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -29,18 +30,20 @@ export const Providers = ({ children }: ProvidersProps) => {
         storageKey="discord-theme"
       >
         <PusherProvider>
-          <DNDProvider>
-            <NotificationProvider>
-              <NextSSRPlugin
-                routerConfig={extractRouterConfig(appFileRouter)}
-              />
-              <QueryProvider>
-                <PathTracker />
-                <ProgressProvider />
-                {children}
-              </QueryProvider>
-            </NotificationProvider>
-          </DNDProvider>
+          <StatusProvider>
+            <DNDProvider>
+              <NotificationProvider>
+                <NextSSRPlugin
+                  routerConfig={extractRouterConfig(appFileRouter)}
+                />
+                <QueryProvider>
+                  <PathTracker />
+                  <ProgressProvider />
+                  {children}
+                </QueryProvider>
+              </NotificationProvider>
+            </DNDProvider>
+          </StatusProvider>
         </PusherProvider>
       </ThemeProvider>
     </ClerkProvider>
