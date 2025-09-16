@@ -87,7 +87,7 @@ enum PermissionScope {
 
 model Profile {
   id         String  @id @default(uuid())
-  userId     String  @unique
+  userId     String
   name       String
   globalName String?
   imageUrl   String  @db.Text

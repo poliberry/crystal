@@ -21,7 +21,7 @@ const ConversationsLayout = async ({ children }: { children: React.ReactNode }) 
   try {
     await db.profile.update({
       where: {
-        userId: profile.userId,
+        id: profile.id,
       },
       data: {
         name: `${user?.username}`,
