@@ -32,14 +32,32 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Note: For simplicity, we'll return the server here
-    // In a more complete implementation, you might want to:
-    // 1. Create default categories and channels in separate repositories
-    // 2. Return a complete server object with channels included
-    
+    // Create default channels
+    const textChannel = await db.channel.create({
+      data: {
+        name: "general",
+        type: ChannelType.TEXT,
+        serverId: server.id,
+        profileId: profile.id,
+        position: 0,
+      },
+    });
+
+    const voiceChannel = await db.channel.create({
+      data: {
+        name: "general",
+        type: ChannelType.AUDIO,
+        serverId: server.id,
+        profileId: profile.id,
+        position: 1,
+      },
+    });
+
+    // Return the server with member and channels
     return NextResponse.json({
       ...server,
-      members: [member]
+      members: [member],
+      channels: [textChannel, voiceChannel]
     });
   } catch (error: unknown) {
     console.error("[SERVERS_POST]: ", error);
