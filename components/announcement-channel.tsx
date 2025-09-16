@@ -78,6 +78,8 @@ export const AnnouncementChannel = ({
           type="channel"
           apiUrl="/api/socket/messages"
           query={socketQuery}
+          member={member}
+          channelId={channel.id}
         />
       )}
     </div>

@@ -1,7 +1,6 @@
 import {
   ChannelType,
   type Channel,
-  MemberRole,
   type Server,
 } from "@prisma/client";
 import {
@@ -40,14 +39,16 @@ import { Avatar } from "@radix-ui/react-avatar";
 import { AvatarImage } from "../ui/avatar";
 import { useEffect, useState } from "react";
 import { SwitchVoiceChannelModal } from "../modals/switch-voice-channel-modal";
-import { useSocket } from "../providers/socket-provider";
+import { useSocket } from "../providers/pusher-provider";
 import { NotificationBadge } from "../notification-badge";
 import { UnreadDot } from "../unread-dot";
+import { PermissionType } from "@/types/permissions";
+import { useServerPermissions } from "@/hooks/use-permissions";
 
 type ServerChannelProps = {
   channel: Channel;
   server: Server;
-  role?: MemberRole;
+  member?: any;
 };
 
 const iconMap = {
@@ -61,7 +62,7 @@ const iconMap = {
 export const ServerChannel = ({
   channel,
   server,
-  role,
+  member,
 }: ServerChannelProps) => {
   const { onOpen } = useModal();
   const params = useParams();
@@ -70,6 +71,12 @@ export const ServerChannel = ({
   const media = useLiveKit();
   const { socket } = useSocket();
   const [users, setUsers] = useState<any[]>([]);
+  
+  const permissions = useServerPermissions(member?.id || '');
+  
+  // Extract permission checks for easier use
+  const canManageChannels = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
+  const canViewChannels = permissions.getPermission(PermissionType.VIEW_CHANNELS).granted;
 
   const getConnectedUsers = async () => {
     const res = await fetch(`/api/rooms?room=${channel.id}`);
@@ -228,7 +235,7 @@ export const ServerChannel = ({
                 )}
             </div>
 
-            {role !== MemberRole.GUEST && (
+            {canManageChannels && (
               <div className="ml-auto flex items-center gap-x-2">
                 <ActionTooltip label="Edit">
                   <Edit
@@ -248,16 +255,20 @@ export const ServerChannel = ({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={(e) => onAction(e, "editChannel")}>
-          Edit Channel
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          className="text-red-500"
-          onClick={(e) => onAction(e, "deleteChannel")}
-        >
-          Delete Channel
-        </ContextMenuItem>
+        {canManageChannels && (
+          <>
+            <ContextMenuItem onClick={(e) => onAction(e, "editChannel")}>
+              Edit Channel
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-red-500"
+              onClick={(e) => onAction(e, "deleteChannel")}
+            >
+              Delete Channel
+            </ContextMenuItem>
+          </>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

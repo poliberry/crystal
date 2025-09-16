@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { UploadButton, uploadFiles } from "@/lib/uploadthing";
 import Image from "next/image";
 import { X, FileIcon, Plus, Send } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import clsx from "clsx";
 import { EmojiPicker } from "../emoji-picker";
+import { PermissionType, PermissionScope } from "@prisma/client";
+import { useChannelPermissions, useServerPermissions } from "@/hooks/use-simple-permissions";
 
 const formSchema = z.object({
   content: z.string().optional(),
@@ -31,10 +33,67 @@ type ChatInputProps = {
   query: Record<string, any>;
   name: string;
   type: "conversation" | "channel";
+  member?: any;
+  channelId?: string;
 };
 
-export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
+export const ChatInput = ({ apiUrl, query, name, type, member, channelId }: ChatInputProps) => {
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Try to use permissions system with fallback
+  let permissions: any = null;
+  let permissionsError = false;
+  
+  try {
+    // Use appropriate permissions hook based on type
+    const channelPermissions = useChannelPermissions(member?.id || '', channelId || '');
+    const serverPermissions = useServerPermissions(member?.id || '');
+    permissions = type === "channel" ? channelPermissions : serverPermissions;
+  } catch (error) {
+    console.error('Permissions hook error:', error);
+    permissionsError = true;
+  }
+  
+  // Permission checks
+  let canSendMessages = true; // Default to allow
+  let canAttachFiles = true;
+  let canUseExternalEmojis = true;
+  
+  if (!permissionsError && permissions && member?.id && !permissions.loading) {
+    try {
+      if (type === "conversation") {
+        // For conversations, always allow
+        canSendMessages = true;
+        canAttachFiles = true;
+        canUseExternalEmojis = true;
+      } else {
+        // For channels, check permissions properly
+        canSendMessages = permissions.isAdmin || permissions.canSendMessages;
+        canAttachFiles = permissions.isAdmin || permissions.hasPermission?.(PermissionType.ATTACH_FILES, PermissionScope.CHANNEL, channelId)?.granted || false;
+        canUseExternalEmojis = permissions.isAdmin || permissions.hasPermission?.(PermissionType.USE_EXTERNAL_EMOJIS, PermissionScope.CHANNEL, channelId)?.granted || false;
+      }
+    } catch (error) {
+      console.error('Permission calculation error:', error);
+      // Fallback to admin check only
+      canSendMessages = permissions?.isAdmin || true;
+      canAttachFiles = permissions?.isAdmin || true;
+      canUseExternalEmojis = permissions?.isAdmin || true;
+    }
+  }
+  
+  // Log for debugging
+  console.log('Chat Input Debug:', {
+    type,
+    memberId: member?.id,
+    channelId,
+    permissionsError,
+    hasPermissions: !!permissions,
+    loading: permissions?.loading,
+    isAdmin: permissions?.isAdmin,
+    canSendMessages,
+    canAttachFiles,
+    canUseExternalEmojis
+  });
 
   const methods = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -181,42 +240,52 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
           {/* Input with upload and send buttons inside */}
           <div className="relative flex items-center bg-background shadow-md p-1 rounded-xl">
             {/* Upload button inside input, left side */}
-            <div className="absolute left-2 top-1/2 -translate-y-1/2">
-              <UploadButton
-                endpoint="messageFile"
-                onClientUploadComplete={(res) => {
-                  if (res && res.length > 0) {
-                    setValue("attachments", [
-                      ...fileUrls,
-                      {
-                        url: res[0].url,
-                        name: res[0].name,
-                        utId: res[0].key,
-                      },
-                    ]);
+            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <EmojiPicker
+                onChange={(emoji: string) => {
+                  if (canSendMessages) {
+                    const current = methods.getValues("content") || "";
+                    setValue("content", current + emoji);
                   }
                 }}
-                onUploadError={(error) => {
-                  console.error("Upload Error:", error);
-                }}
-                appearance={{
-                  button:
-                    "p-1 h-8 w-8 bg-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full shadow-none",
-                  allowedContent: "hidden",
-                }}
-                content={{
-                  button({ ready }) {
-                    return <Plus className="h-6 w-6 text-zinc-500" />;
-                  },
-                }}
               />
+              {canAttachFiles && (
+                <UploadButton
+                  endpoint="messageFile"
+                  onClientUploadComplete={(res) => {
+                    if (res && res.length > 0) {
+                      setValue("attachments", [
+                        ...fileUrls,
+                        {
+                          url: res[0].url,
+                          name: res[0].name,
+                          utId: res[0].key,
+                        },
+                      ]);
+                    }
+                  }}
+                  onUploadError={(error) => {
+                    console.error("Upload Error:", error);
+                  }}
+                  appearance={{
+                    button:
+                      "p-1 h-8 w-8 bg-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full shadow-none",
+                    allowedContent: "hidden",
+                  }}
+                  content={{
+                    button({ ready }) {
+                      return <Plus className="h-6 w-6 text-zinc-500" />;
+                    },
+                  }}
+                />
+              )}
             </div>
             {/* Send button inside input, right side */}
             <div className="absolute right-2 top-1/2 -translate-y-1/2">
               <Button
                 type="submit"
                 variant="ghost"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !canSendMessages}
                 size="icon"
                 className="p-2"
               >
@@ -229,10 +298,12 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
               render={({ field }) => (
                 <Input
                   {...field}
-                  placeholder={`Message ${
-                    type === "channel" ? `#${name}` : name
-                  }`}
-                  disabled={isSubmitting}
+                  placeholder={
+                    !canSendMessages 
+                      ? "You do not have permission to send messages"
+                      : `Message ${type === "channel" ? `#${name}` : name}`
+                  }
+                  disabled={isSubmitting || !canSendMessages}
                   className="flex-1 pl-12 pr-12 bg-transparent border-none focus:ring-0 focus:border-transparent"
                   autoComplete="off"
                 />

@@ -12,8 +12,8 @@ export const useDNDStatus = () => {
   const fetchStatus = async () => {
     try {
       const response = await axios.get("/api/user/status");
-      const { status, isDND: dndStatus } = response.data;
-      setCurrentStatus(status);
+      const { presenceStatus, status, isDND: dndStatus } = response.data;
+      setCurrentStatus(presenceStatus);
       setIsDND(dndStatus);
     } catch (error) {
       console.error("Failed to fetch user status:", error);
@@ -38,7 +38,7 @@ export const useDNDStatus = () => {
   const updateStatus = async (newStatus: string) => {
     try {
       setLoading(true);
-      const response = await axios.patch("/api/user/status", {
+      const response = await axios.post("/api/socket/presence-status", {
         status: newStatus
       });
       const { status, isDND: dndStatus } = response.data;

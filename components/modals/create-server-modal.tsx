@@ -71,37 +71,66 @@ export const CreateServerModal = () => {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
-            Create your community
-          </DialogTitle>
+      <DialogContent className="p-0 bg-gradient-to-br from-white dark:from-black to-blue-300 dark:to-[#000226] overflow-hidden max-w-full border-none rounded-none h-full flex flex-row">
+        <div className="w-1/2 h-full">
+          <DialogHeader className="pt-8 px-6">
+            <DialogTitle className="text-2xl text-left font-bold uppercase headerFont">
+              Create your community
+            </DialogTitle>
 
-          <DialogDescription className="text-center text-zinc-500">
-            Give your community a personality with a name and an image. You can
-            always change it later.
-          </DialogDescription>
-        </DialogHeader>
+            <DialogDescription className="text-left text-zinc-500">
+              Give your community a personality with a name and an image. You
+              can always change it later.
+            </DialogDescription>
+          </DialogHeader>
+              <br />
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8 h-full p-4 pt-8 bg-white dark:bg-black rounded-tr-3xl"
+              autoCapitalize="off"
+              autoComplete="off"
+            >
+              <div className="space-y-8 px-6">
+                <div className="flex flex-col items-left justify-left text-left">
+                  <FormLabel className="uppercase text-xs font-bold text-zinc-500">
+                    Server name
+                  </FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <FileUpload
+                            endpoint="serverImage"
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-8"
-            autoCapitalize="off"
-            autoComplete="off"
-          >
-            <div className="space-y-8 px-6">
-              <div className="flex items-center justify-center text-center">
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="imageUrl"
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
+                      <FormLabel className="uppercase text-xs font-bold text-zinc-500">
+                        Server name
+                      </FormLabel>
+
                       <FormControl>
-                        <FileUpload
-                          endpoint="serverImage"
-                          value={field.value}
-                          onChange={field.onChange}
+                        <Input
+                          disabled={isLoading}
+                          aria-disabled={isLoading}
+                          className="dark:bg-zinc-300/10 bg-zinc-300/50 border-0 dark:text-white text-black"
+                          placeholder="Enter server name"
+                          {...field}
                         />
                       </FormControl>
 
@@ -111,42 +140,19 @@ export const CreateServerModal = () => {
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="uppercase text-xs font-bold text-zinc-500">
-                      Server name
-                    </FormLabel>
-
-                    <FormControl>
-                      <Input
-                        disabled={isLoading}
-                        aria-disabled={isLoading}
-                        className="dark:bg-zinc-300/10 bg-zinc-300/50 border-0 dark:text-white text-black"
-                        placeholder="Enter server name"
-                        {...field}
-                      />
-                    </FormControl>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter className="px-6 py-4">
-              <Button
-                disabled={isLoading}
-                aria-disabled={isLoading}
-                variant="primary"
-              >
-                Create
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+              <DialogFooter className="px-6 py-4 relative bottom-1">
+                <Button
+                  disabled={isLoading}
+                  aria-disabled={isLoading}
+                  variant="primary"
+                >
+                  Create
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </div>
+        <span className="w-1/2 h-full" />
       </DialogContent>
     </Dialog>
   );

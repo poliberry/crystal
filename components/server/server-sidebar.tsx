@@ -1,4 +1,4 @@
-import { ChannelType, MemberRole } from "@prisma/client";
+import { ChannelType } from "@prisma/client";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video, Radio, Megaphone } from "lucide-react";
 import { redirect } from "next/navigation";
 
@@ -6,6 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
+import { PermissionManager } from "@/lib/permissions";
+import { PermissionType } from "@/types/permissions";
 
 import { ServerChannelList } from "./server-channel-list";
 import { ServerHeader } from "./server-header";
@@ -25,12 +27,33 @@ const iconMap = {
   [ChannelType.ANNOUNCEMENT]: <Megaphone className="mr-2 h-4 w-4" />,
 };
 
-const roleIconMap = {
-  [MemberRole.GUEST]: null,
-  [MemberRole.MODERATOR]: (
-    <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-  ),
-  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />,
+const getRoleIcon = (member: any) => {
+  // Temporarily fallback to old role system while we verify the database
+  if (member.role === 'ADMIN') {
+    return <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />;
+  }
+  if (member.role === 'MODERATOR') {
+    return <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />;
+  }
+  
+  // TODO: Once database is verified, use this permission-based logic:
+  // Check if member has administrator permission
+  // if (member.memberRoles?.some((mr: any) => 
+  //   mr.role.permissions?.some((p: any) => p.permission === 'ADMINISTRATOR' && p.grant === 'ALLOW')
+  // )) {
+  //   return <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />;
+  // }
+  
+  // Check if member has moderation permissions
+  // if (member.memberRoles?.some((mr: any) => 
+  //   mr.role.permissions?.some((p: any) => 
+  //     ['KICK_MEMBERS', 'BAN_MEMBERS', 'MANAGE_MESSAGES'].includes(p.permission) && p.grant === 'ALLOW'
+  //   )
+  // )) {
+  //   return <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />;
+  // }
+  
+  return null;
 };
 
 export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
@@ -51,9 +74,18 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
       members: {
         include: {
           profile: true,
+          // memberRoles: {
+          //   include: {
+          //     role: {
+          //       include: {
+          //         permissions: true
+          //       }
+          //     }
+          //   }
+          // }
         },
         orderBy: {
-          role: "asc",
+          createdAt: "asc",
         },
       },
       categories: {
@@ -86,14 +118,26 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
     (member) => member.profileId !== profile.id
   );
 
-  const role = server.members.find(
+  const currentMember = server.members.find(
     (member) => member.profileId === profile.id
-  )?.role;
+  );
+  
+  if (!currentMember) redirect("/");
+
+  // Get member permissions
+  const canManageChannels = await PermissionManager.hasPermission(
+    currentMember.id,
+    PermissionType.MANAGE_CHANNELS
+  );
   
   return (
     <div className="flex flex-col h-full text-primary w-full bg-transparent border-r border-l border-muted">
-      <ServerHeader server={server} role={role} />
-      <ScrollArea className="flex-1 px-3 dark:bg-black bg-white pt-4 -mt-4">
+      <ServerHeader 
+        server={server} 
+        member={currentMember}
+        canManageChannels={canManageChannels.granted}
+      />
+      <ScrollArea className="flex-1 px-3 backdrop-blur-2xl bg-white/20 dark:bg-black/20 pt-4 -mt-4">
         <div className="mt-2">
           <ServerSearch
             data={[
@@ -130,7 +174,7 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
                 data: members?.map((member) => ({
                   id: member.id,
                   name: member.profile.name,
-                  icon: roleIconMap[member.role],
+                  icon: getRoleIcon(member),
                 })),
               },
             ]}
@@ -140,7 +184,7 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
           <div className="mb-2">
             <ServerChannelList
               categories={server.categories}
-              role={role}
+              member={currentMember}
               server={server}
             />
           </div>

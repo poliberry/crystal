@@ -92,7 +92,7 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
       }}
       currentProfile={profile}
     >
-      <div className="bg-transparent flex flex-col h-full">
+      <div className="bg-gradient-to-b from-black to-[#000226] flex flex-col h-full">
         {channel.type === ChannelType.TEXT && (
           <ChatHeader
             name={channel.name}
@@ -125,6 +125,8 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
                 channelId: channel.id,
                 serverId: channel.serverId,
               }}
+              member={member}
+              channelId={channel.id}
             />
           </>
         )}

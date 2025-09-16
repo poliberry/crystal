@@ -5,11 +5,13 @@ import {
   type Member,
   type Profile,
   type Server,
+  UserStatus,
 } from "@prisma/client";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { getDiscordPresence, getStatusColor, getStatusDisplayText } from "@/lib/presence-utils";
 
 import { UserAvatar } from "../user-avatar";
 import { useEffect, useState } from "react";
@@ -42,18 +44,15 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
   };
   const params = useParams();
   const router = useRouter();
-  const [status, setStatus] = useState<"ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE">(member.profile.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
+  const [status, setStatus] = useState<UserStatus>(member.profile.status as UserStatus);
   const [presenceStatus, setPresenceStatus] = useState<string | null>(member.profile.presenceStatus);
   const icon = roleIconMap[member.role];
 
   // Listen for socket status updates
   useEffect(() => {
-    const statusHandler = (payload: { userId: string; status: string }) => {
+    const statusHandler = (payload: { userId: string; status: UserStatus }) => {
       if (payload.userId === member.profile.userId) {
-        const allowedStatuses = ["ONLINE", "IDLE", "DND", "INVISIBLE", "OFFLINE"];
-        if (allowedStatuses.includes(payload.status)) {
-          setStatus(payload.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
-        }
+        setStatus(payload.status);
       }
     };
 
@@ -76,15 +75,11 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
     };
   }, [member.profile.userId, socket]);
 
-  // Status indicator mapping
-  const statusMap: Record<string, { color: string; text: string }> = {
-    ONLINE: { color: "bg-green-500", text: "Online" },
-    IDLE: { color: "bg-yellow-500", text: "Idle" },
-    DND: { color: "bg-red-500", text: "Do Not Disturb" },
-    INVISIBLE: { color: "bg-gray-400", text: "Invisible" },
-  };
-
-  const isOffline = status === "OFFLINE" || !status;
+  // Get Discord-like presence information
+  const presence = getDiscordPresence(status, presenceStatus);
+  const statusColor = getStatusColor(presence.status);
+  const statusText = getStatusDisplayText(presence.status);
+  const isOffline = presence.status === UserStatus.OFFLINE || presence.status === UserStatus.INVISIBLE;
 
   return (
     <UserDialog profileId={member.profile.id} serverId={server.id}>
@@ -103,13 +98,13 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
             isOffline && "opacity-40"
           )}
         />
-        {!isOffline && statusMap[status] && (
+        {!isOffline && statusColor && (
           <span
             className={cn(
               "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white",
-              statusMap[status].color
+              statusColor
             )}
-            title={statusMap[status].text}
+            title={statusText}
           />
         )}
       </div>
@@ -128,7 +123,7 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
         >
           {member.profile.globalName || member.profile.name}
         </p>
-        {!isOffline && presenceStatus && (
+        {presence.customStatus && (
           <p
             className={cn(
               "text-xs truncate group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
@@ -141,7 +136,7 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
                   : "text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300")
             )}
           >
-            {presenceStatus}
+            {presence.customStatus}
           </p>
         )}
       </div>

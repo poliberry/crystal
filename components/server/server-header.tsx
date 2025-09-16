@@ -1,7 +1,6 @@
 "use client";
 
-import { MemberRole } from "@prisma/client";
-import {
+import { 
   ChevronDown,
   FolderPlus,
   LogOut,
@@ -22,17 +21,26 @@ import {
 import { useModal } from "@/hooks/use-modal-store";
 import type { ServerWithMembersWithProfiles } from "@/types";
 import { Card, CardContent } from "../ui/card";
+import { PermissionType } from "@/types/permissions";
+import { useServerPermissions } from "@/hooks/use-permissions";
 
 type ServerHeaderProps = {
   server: ServerWithMembersWithProfiles;
-  role?: MemberRole;
+  member: any;
+  canManageChannels?: boolean;
 };
 
-export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
+export const ServerHeader = ({ server, member, canManageChannels }: ServerHeaderProps) => {
   const { onOpen } = useModal();
-
-  const isAdmin = role === MemberRole.ADMIN;
-  const isModerator = isAdmin || role === MemberRole.MODERATOR;
+  
+  const permissions = useServerPermissions(member?.id || '');
+  
+  // Extract permission checks for easier use
+  const canManageServer = permissions.getPermission(PermissionType.MANAGE_SERVER).granted;
+  const canManageChannelsCheck = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
+  const canManageRoles = permissions.getPermission(PermissionType.MANAGE_ROLES).granted;
+  const canCreateInvite = permissions.getPermission(PermissionType.CREATE_INSTANT_INVITE).granted;
+  const isAdmin = permissions.getPermission(PermissionType.ADMINISTRATOR).granted;
 
   return (
     <DropdownMenu>
@@ -61,7 +69,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent className="w-56 text-xs font-medium text-black dark:text-neutral-400 space-y-[2px]">
-        {isModerator && (
+        {canCreateInvite && (
           <DropdownMenuItem
             onClick={() => onOpen("invite", { server })}
             className="text-indigo-600 dark:text-indigo-400 px-3 py-2 text-sm cursor-pointer"
@@ -70,16 +78,16 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
             <UserPlus className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {isAdmin && (
+        {canManageServer && (
           <DropdownMenuItem
-            onClick={() => onOpen("editServer", { server })}
+            onClick={() => onOpen("enhancedServerSettings", { server, currentMember: member })}
             className="px-3 py-2 text-sm cursor-pointer"
           >
             Server Settings
             <Settings className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {isAdmin && (
+        {canManageRoles && (
           <DropdownMenuItem
             onClick={() => onOpen("members", { server })}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -88,7 +96,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
             <Users className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {isModerator && (
+        {canManageChannelsCheck && (
           <DropdownMenuItem
             onClick={() => onOpen("createChannel")}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -97,7 +105,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
             <PlusCircle className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {isModerator && (
+        {canManageChannelsCheck && (
           <DropdownMenuItem
             onClick={() => onOpen("createCategory")}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -106,7 +114,7 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
             <FolderPlus className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {isModerator && <DropdownMenuSeparator />}
+        {(canManageChannelsCheck || canManageServer || canManageRoles) && <DropdownMenuSeparator />}
         {isAdmin && (
           <DropdownMenuItem
             onClick={() => onOpen("deleteServer", { server })}

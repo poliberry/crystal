@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { useRouter } from "next/navigation";
 import { GripVertical } from "lucide-react";
-import { Channel, MemberRole } from "@prisma/client";
+import { Channel } from "@prisma/client";
 import type { ServerWithMembersWithProfiles } from "@/types";
 import { ServerChannel } from "./server-channel";
 import { ServerSection } from "./server-section";
+import { PermissionType } from "@/types/permissions";
+import { useServerPermissions } from "@/hooks/use-permissions";
 
 // Types
 interface Category {
@@ -19,7 +21,7 @@ interface Category {
 
 interface ServerChannelListProps {
     categories: Category[];
-    role?: MemberRole;
+    member: any;
     server: ServerWithMembersWithProfiles;
 }
 
@@ -38,19 +40,21 @@ const DropIndicator = ({ isDraggingOver }: { isDraggingOver: boolean }) => {
 const DraggableCategory = ({ 
     category, 
     index, 
-    role, 
-    server 
+    member, 
+    server,
+    canManageChannels
 }: { 
     category: Category; 
     index: number; 
-    role?: MemberRole; 
-    server: ServerWithMembersWithProfiles; 
+    member: any; 
+    server: ServerWithMembersWithProfiles;
+    canManageChannels: boolean;
 }) => {
     return (
         <Draggable 
             draggableId={`category-${category.id}`} 
             index={index}
-            isDragDisabled={role === "GUEST"}
+            isDragDisabled={!canManageChannels}
         >
             {(provided, snapshot) => (
                 <div
@@ -61,7 +65,7 @@ const DraggableCategory = ({
                     }`}
                 >
                     <div className="flex items-center gap-1 group">
-                        {role !== "GUEST" && (
+                        {canManageChannels && (
                             <div
                                 {...provided.dragHandleProps}
                                 className="p-1 hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 rounded cursor-grab active:cursor-grabbing transition-all duration-200 opacity-60 hover:opacity-100"
@@ -74,7 +78,7 @@ const DraggableCategory = ({
                             <ServerSection
                                 sectionType="category"
                                 server={server}
-                                role={role}
+                                member={member}
                                 label={category.name}
                                 categoryId={category.id}
                             />
@@ -92,7 +96,7 @@ const DraggableCategory = ({
                         key={channel.id}
                         draggableId={`channel-${channel.id}`}
                         index={channelIndex}
-                        isDragDisabled={role === "GUEST"}
+                        isDragDisabled={!canManageChannels}
                     >
                         {(provided, snapshot) => (
                             <div
@@ -103,7 +107,7 @@ const DraggableCategory = ({
                                 }`}
                             >
                                 <div className="flex items-center gap-1 group">
-                                    {role !== "GUEST" && (
+                                    {canManageChannels && (
                                         <div
                                             {...provided.dragHandleProps}
                                             className="p-0.5 hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 rounded cursor-grab active:cursor-grabbing transition-all duration-200 opacity-40 hover:opacity-100"
@@ -115,7 +119,7 @@ const DraggableCategory = ({
                                     <div className="flex-1">
                                         <ServerChannel
                                             channel={channel}
-                                            role={role}
+                                            member={member}
                                             server={server}
                                         />
                                     </div>
@@ -135,8 +139,14 @@ const DraggableCategory = ({
 };
 
 // Main Component
-export const ServerChannelList = ({ categories, role, server }: ServerChannelListProps) => {
+export const ServerChannelList = ({ categories, member, server }: ServerChannelListProps) => {
     const router = useRouter();
+    
+    const permissions = useServerPermissions(member?.id || '');
+    
+    // Extract permission checks for easier use
+    const canManageChannels = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
+    const canViewChannels = permissions.getPermission(PermissionType.VIEW_CHANNELS).granted;
 
     const handleDragEnd = useCallback(async (result: DropResult) => {
         const { destination, source, type, draggableId } = result;
@@ -261,8 +271,9 @@ export const ServerChannelList = ({ categories, role, server }: ServerChannelLis
                                 key={category.id}
                                 category={category}
                                 index={index}
-                                role={role}
+                                member={member}
                                 server={server}
+                                canManageChannels={canManageChannels}
                             />
                         ))}
                         

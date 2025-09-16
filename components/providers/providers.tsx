@@ -6,7 +6,7 @@ import { extractRouterConfig } from "uploadthing/server";
 import { appFileRouter } from "@/app/api/uploadthing/core";
 import { ModalProvider } from "@/components/providers/modal-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
-import { SocketProvider } from "@/components/providers/socket-provider";
+import { PusherProvider } from "@/components/providers/pusher-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { NotificationProvider } from "@/components/providers/notification-provider";
 import { DNDProvider } from "@/components/providers/dnd-provider";
@@ -28,7 +28,7 @@ export const Providers = ({ children }: ProvidersProps) => {
         enableSystem={false}
         storageKey="discord-theme"
       >
-        <SocketProvider>
+        <PusherProvider>
           <DNDProvider>
             <NotificationProvider>
               <NextSSRPlugin
@@ -41,7 +41,7 @@ export const Providers = ({ children }: ProvidersProps) => {
               </QueryProvider>
             </NotificationProvider>
           </DNDProvider>
-        </SocketProvider>
+        </PusherProvider>
       </ThemeProvider>
     </ClerkProvider>
   );

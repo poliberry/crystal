@@ -18,11 +18,17 @@ import { ModeToggle } from "../mode-toggle";
 import { Input } from "../ui/input";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
-import { useLiveKitRoom, useLocalParticipant, useRemoteParticipants } from "@livekit/components-react";
+import {
+  useLiveKitRoom,
+  useLocalParticipant,
+  useRemoteParticipants,
+} from "@livekit/components-react";
 import { getLiveKitRoom } from "@/lib/LiveKitRoomManager";
 import { Badge } from "../ui/badge";
 import React, { useEffect, useRef, useState } from "react";
-import { Profile, UserStatus } from "@prisma/client";
+import { Profile, UserStatus } from "@/lib/types";
+import { useStatusInitializer } from "@/hooks/use-status-initializer";
+import { usePresence } from "@/hooks/use-presence";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -33,18 +39,32 @@ import {
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { useModal } from "@/hooks/use-modal-store";
-import { useSocket } from "../providers/socket-provider";
+import { usePusher } from "../providers/pusher-provider";
 import { useDND } from "../providers/dnd-provider";
 import { ActionTooltip } from "../action-tooltip";
+import { UserDialog } from "../user-dialog";
 
 export const UserCard = ({ profile }: { profile: Profile }) => {
   const { user } = useUser();
   const { onOpen } = useModal();
-  const { socket } = useSocket();
+  const { socket } = usePusher();
   const { localParticipant } = useLocalParticipant();
   const livekit = useLiveKit();
   const { isDND, updateStatus } = useDND();
-  const [presence, setPresence] = useState<"ONLINE" | "IDLE" | "DND" | "OFFLINE">("ONLINE");
+
+  // Use the enhanced presence system
+  useStatusInitializer({ profile });
+  const { status, presenceStatus, setStatus, loading } = usePresence({
+    initialStatus: profile?.status,
+    initialPresenceStatus: profile?.presenceStatus,
+  });
+
+  const [presence, setPresence] = useState<
+    "ONLINE" | "IDLE" | "DND" | "OFFLINE"
+  >(() => {
+    if (status === UserStatus.INVISIBLE) return "OFFLINE";
+    return (status as "ONLINE" | "IDLE" | "DND" | "OFFLINE") || "ONLINE";
+  });
   const idleTimeout = useRef<NodeJS.Timeout | null>(null);
   const [showCallUi, setShowCallUi] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -52,37 +72,38 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
 
   const allParticipants = [localParticipant, ...remoteParticipants];
 
-  const setOnline = async (status: { presence: "ONLINE" | "IDLE" | "DND" | "OFFLINE" }) => {
-    setPresence(status.presence);
+  const setOnline = async (statusUpdate: {
+    presence: "ONLINE" | "IDLE" | "DND" | "OFFLINE";
+  }) => {
+    setPresence(statusUpdate.presence);
     if (idleTimeout.current) clearTimeout(idleTimeout.current);
-    // Update status using the DND context
+
     try {
-      await updateStatus(status.presence);
+      // Use the new presence system for better persistence
+      await setStatus(statusUpdate.presence as UserStatus);
     } catch (error) {
       console.error("Failed to update user status:", error);
     }
   };
 
   useEffect(() => {
-    const setStatus = async () => {
-      const res = await fetch(`/api/user?userId=${profile?.id}`);
-      const profileData = await res.json();
-      setOnline({
-        presence:
-          (profileData?.prevStatus as "ONLINE" | "IDLE" | "DND" | "OFFLINE") || "ONLINE",
-      }); // Set to online on mount
-    };
-
-    setStatus();
+    // Initialize status from the presence hook
+    if (status) {
+      const mappedStatus =
+        status === UserStatus.INVISIBLE
+          ? "OFFLINE"
+          : (status as "ONLINE" | "IDLE" | "DND" | "OFFLINE");
+      setPresence(mappedStatus);
+    }
 
     const handleUnload = () => {
       const blob = new Blob([JSON.stringify({ status: "OFFLINE" })], {
         type: "application/json",
       });
-      navigator.sendBeacon("/api/socket/user-status", blob);
+      navigator.sendBeacon("/api/user/status", blob);
     };
 
-    socket.on("rtc:calls:start", (data: any) => {
+    socket?.on("rtc:calls:start", (data: any) => {
       console.log("[RTC_CALL_START]", data);
       if (data.memberId === profile?.id) {
         onOpen("dmCall", {
@@ -95,22 +116,22 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
           },
         });
       }
-    })
+    });
 
     window.addEventListener("beforeunload", handleUnload);
 
     return () => {
       window.removeEventListener("beforeunload", handleUnload);
     };
-  }, []);
+  }, [status]);
 
-      function safeParseMetadata(raw?: string): { avatar?: string } | null {
-        try {
-            return raw ? JSON.parse(raw) : null;
-        } catch {
-            return null;
-        }
+  function safeParseMetadata(raw?: string): { avatar?: string } | null {
+    try {
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
     }
+  }
 
   // Map presence to badge color and text
   const presenceMap = {
@@ -123,13 +144,15 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   return (
     <Card
       className={`md:block max-h-auto absolute top-10 right-0 min-w-[280px] max-w-full border-none flex flex-col rounded-none items-start`}
-    > 
-      <div className={cn(
-        "flex items-center gap-x-3 w-full pl-2",
-        livekit.connected ? "justify-start" : "justify-between"
-      )}>
+    >
+      <div
+        className={cn(
+          "flex items-center gap-x-3 w-full pl-2",
+          livekit.connected ? "justify-start" : "justify-between"
+        )}
+      >
         {livekit.connected && (
-            <>
+          <>
             <Button
               variant="primary"
               size="sm"
@@ -163,25 +186,29 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
               <Phone className="h-4 w-4 text-green-400 ml-1 flex-shrink-0" />
             </Button>
             <Separator orientation="vertical" className="h-6 flex-shrink-0" />
-            </>
+          </>
+        )}
+        <div
+          className={cn(
+            "flex items-center gap-x-3 py-[5px]",
+            livekit.connected ? "flex-1 min-w-0" : ""
           )}
-        <div className={cn(
-          "flex items-center gap-x-3 py-[5px]",
-          livekit.connected ? "flex-1 min-w-0" : ""
-        )}>
+        >
           <ContextMenu>
             <ContextMenuTrigger>
-              <div className="relative cursor-pointer group">
-                <Avatar className="w-8 h-8 rounded-full group-hover:opacity-80 transition-opacity">
-                  <AvatarImage
-                    src={user?.imageUrl}
-                    alt={user?.username || ""}
+              <UserDialog profileId={profile.id}>
+                <div className="relative cursor-pointer group">
+                  <Avatar className="w-8 h-8 rounded-full group-hover:opacity-80 transition-opacity">
+                    <AvatarImage
+                      src={user?.imageUrl}
+                      alt={user?.username || ""}
+                    />
+                  </Avatar>
+                  <Badge
+                    className={`absolute bottom-0 right-0 ${presenceMap[presence].color} text-white p-[5px] text-xs border-2 border-background rounded-full`}
                   />
-                </Avatar>
-                <Badge
-                  className={`absolute bottom-0 right-0 ${presenceMap[presence].color} text-white p-[5px] text-xs border-2 border-background rounded-full`}
-                />
-              </div>
+                </div>
+              </UserDialog>
             </ContextMenuTrigger>
             <ContextMenuContent className="w-48">
               <ContextMenuItem
@@ -217,7 +244,9 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
             </ContextMenuContent>
           </ContextMenu>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-sm font-semibold truncate">{profile.name}</span>
+            <span className="text-sm font-semibold truncate">
+              {profile.name}
+            </span>
             <div className="text-[10.5px] text-muted-foreground truncate">
               {presenceMap[presence].text}
             </div>
@@ -225,45 +254,14 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
         </div>
 
         <div className="flex items-center gap-x-2 pr-1 flex-shrink-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-8 h-8" size="icon">
-                <CogIcon className="w-5 h-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <CustomCssAction />
-              <ModeToggle />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <DropdownMenuItem className="w-full justify-between">
-                    Set Status
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </DropdownMenuItem>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="right" sideOffset={10}>
-                  <DropdownMenuItem
-                    onClick={() => setOnline({ presence: "ONLINE" })}
-                  >
-                    Online
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setOnline({ presence: "IDLE" })}
-                  >
-                    Idle
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setOnline({ presence: "DND" })}
-                  >
-                    Do Not Disturb
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-                <DropdownMenuItem onClick={() => onOpen('userSettings')} className="w-full justify-start">
-                  Account
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="ghost"
+            onClick={() => onOpen("userSettings")}
+            className="w-8 h-8"
+            size="icon"
+          >
+            <CogIcon className="w-5 h-5" />
+          </Button>
         </div>
       </div>
       {livekit.connected && showCallUi && <FloatingCallCard />}
@@ -271,21 +269,29 @@ export const UserCard = ({ profile }: { profile: Profile }) => {
   );
 };
 
-function AvatarCard({ name, image, isSpeaking }: { name: string; image?: string; isSpeaking: boolean }) {
-    return (
-        <div
-            className={cn(
-                "relative w-5 h-5 rounded-full overflow-hidden border-2 flex-shrink-0",
-                isSpeaking ? "border-green-400" : "border-zinc-700"
-            )}
-        >
-            {image ? (
-                <img src={image} alt={name} className="w-full h-full object-cover" />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center bg-zinc-700 text-xs">
-                    {name.charAt(0).toUpperCase()}
-                </div>
-            )}
+function AvatarCard({
+  name,
+  image,
+  isSpeaking,
+}: {
+  name: string;
+  image?: string;
+  isSpeaking: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative w-5 h-5 rounded-full overflow-hidden border-2 flex-shrink-0",
+        isSpeaking ? "border-green-400" : "border-zinc-700"
+      )}
+    >
+      {image ? (
+        <img src={image} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-zinc-700 text-xs">
+          {name.charAt(0).toUpperCase()}
         </div>
-    );
+      )}
+    </div>
+  );
 }

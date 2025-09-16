@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
-import { MemberSidebar } from "./member-sidebar";
+import { EnhancedMemberSidebar } from "./enhanced-member-sidebar-pusher";
 
 type MemberSidebarWrapperProps = {
   serverId: string;
@@ -12,6 +12,7 @@ export const MemberSidebarWrapper = async ({ serverId }: MemberSidebarWrapperPro
 
   if (!profile) redirect("/");
 
+  // Enhanced server data with roles
   const server = await db.server.findUnique({
     where: {
       id: serverId,
@@ -25,20 +26,47 @@ export const MemberSidebarWrapper = async ({ serverId }: MemberSidebarWrapperPro
       members: {
         include: {
           profile: true,
+          memberRoles: {
+            include: {
+              role: true
+            },
+            orderBy: {
+              role: {
+                position: 'desc'
+              }
+            }
+          }
         },
         orderBy: {
           role: "asc",
         },
       },
+      roles: {
+        include: {
+          permissions: true
+        },
+        orderBy: {
+          position: 'desc'
+        }
+      }
     },
   });
 
   if (!server) redirect("/");
 
+  // Transform data to include flattened roles on members
+  const enhancedServer = {
+    ...server,
+    members: server.members.map(member => ({
+      ...member,
+      roles: member.memberRoles.map(mr => mr.role)
+    }))
+  };
+
   return (
-    <MemberSidebar
+    <EnhancedMemberSidebar
       serverId={serverId}
-      initialData={server}
+      initialData={enhancedServer}
       currentProfile={profile}
     />
   );

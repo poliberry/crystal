@@ -1,18 +1,39 @@
-"use client"
+"use client";
 import { PageContextProvider } from "@/components/providers/page-context-provider";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, UserMinus, Ban, MessageCircle, Check, X } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  UserMinus,
+  Ban,
+  MessageCircle,
+  Check,
+  X,
+} from "lucide-react";
 import { useModal } from "@/hooks/use-modal-store";
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Card, CardTitle } from "@/components/ui/card";
+import { Kode_Mono } from "next/font/google";
+
+const kodeMono = Kode_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-kode-mono",
+});
 
 interface Friend {
   id: string;
@@ -71,7 +92,9 @@ export default function ConversationsHome() {
   const searchUsers = async () => {
     try {
       setSearchLoading(true);
-      const response = await axios.get(`/api/friends/search?q=${encodeURIComponent(searchQuery)}`);
+      const response = await axios.get(
+        `/api/friends/search?q=${encodeURIComponent(searchQuery)}`
+      );
       setSearchResults(response.data.users || []);
     } catch (error) {
       console.error("Error searching users:", error);
@@ -89,17 +112,24 @@ export default function ConversationsHome() {
       setSearchQuery("");
       setSearchResults([]);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to send friend request");
+      toast.error(
+        error.response?.data?.message || "Failed to send friend request"
+      );
     }
   };
 
-  const respondToFriendRequest = async (friendshipId: string, action: "accept" | "decline" | "cancel") => {
+  const respondToFriendRequest = async (
+    friendshipId: string,
+    action: "accept" | "decline" | "cancel"
+  ) => {
     try {
       await axios.patch(`/api/friends/${friendshipId}`, { action });
       toast.success(`Friend request ${action}ed!`);
       fetchFriendsData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || `Failed to ${action} friend request`);
+      toast.error(
+        error.response?.data?.message || `Failed to ${action} friend request`
+      );
     }
   };
 
@@ -137,55 +167,65 @@ export default function ConversationsHome() {
     try {
       const response = await axios.post("/api/conversations", {
         participantIds: [targetUserId],
-        type: "DIRECT_MESSAGE"
+        type: "DIRECT_MESSAGE",
       });
       router.push(`/conversations/${response.data.id}`);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to start conversation");
+      toast.error(
+        error.response?.data?.message || "Failed to start conversation"
+      );
     }
   };
 
   const statusColors = {
     ONLINE: "bg-green-500",
-    IDLE: "bg-yellow-500", 
+    IDLE: "bg-yellow-500",
     DND: "bg-red-500",
     INVISIBLE: "bg-gray-400",
-    OFFLINE: "bg-gray-400"
+    OFFLINE: "bg-gray-400",
   };
 
   const renderUserCard = (user: Friend, actions: React.ReactNode) => (
-      <div key={user.id} className="flex items-center justify-between p-3 hover:bg-zinc-50 dark:hover:bg-background rounded-lg m-4">
-        <div className="flex items-center space-x-3">
-          <div className="relative">
-            <UserAvatar src={user.imageUrl} alt={user.globalName || user.name} className="h-10 w-10" />
-            <span 
-              className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
-                statusColors[user.status as keyof typeof statusColors] || statusColors.OFFLINE
-              }`}
-            />
-          </div>
-          <div>
-            <p className="font-medium">{user.globalName || user.name}</p>
-            {user.since && (
-              <p className="text-sm text-muted-foreground">
-                Friends since {new Date(user.since).toLocaleDateString()}
-              </p>
-            )}
-            {user.requestedAt && (
-              <p className="text-sm text-muted-foreground">
-                Requested {new Date(user.requestedAt).toLocaleDateString()}
-              </p>
-            )}
-            {user.reason && (
-              <p className="text-sm text-muted-foreground">Reason: {user.reason}</p>
-            )}
-          </div>
+    <div
+      key={user.id}
+      className="flex items-center justify-between p-3 hover:bg-zinc-50 dark:hover:bg-background rounded-lg m-4"
+    >
+      <div className="flex items-center space-x-3">
+        <div className="relative">
+          <UserAvatar
+            src={user.imageUrl}
+            alt={user.globalName || user.name}
+            className="h-10 w-10"
+          />
+          <span
+            className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+              statusColors[user.status as keyof typeof statusColors] ||
+              statusColors.OFFLINE
+            }`}
+          />
         </div>
-        <div className="flex items-center space-x-2">
-          {actions}
+        <div>
+          <p className="font-medium">{user.globalName || user.name}</p>
+          {user.since && (
+            <p className="text-sm text-muted-foreground">
+              Friends since {new Date(user.since).toLocaleDateString()}
+            </p>
+          )}
+          {user.requestedAt && (
+            <p className="text-sm text-muted-foreground">
+              Requested {new Date(user.requestedAt).toLocaleDateString()}
+            </p>
+          )}
+          {user.reason && (
+            <p className="text-sm text-muted-foreground">
+              Reason: {user.reason}
+            </p>
+          )}
         </div>
       </div>
-    );
+      <div className="flex items-center space-x-2">{actions}</div>
+    </div>
+  );
 
   return (
     <PageContextProvider
@@ -196,7 +236,10 @@ export default function ConversationsHome() {
       }}
     >
       <div className="flex flex-col h-full">
-        <div className="pb-6">
+        <Card className="rounded-none border-none p-[15.5px] bg-gradient-to-br from-white dark:from-black to-blue dark:to-[#000226]">
+          <CardTitle className="headerFont uppercase">Friends</CardTitle>
+        </Card>
+        <div className="pb-6 border-t">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-5 rounded-none border-b dark:bg-black h-fit p-0">
               <TabsTrigger value="friends" className="py-3 rounded-none">
@@ -223,8 +266,12 @@ export default function ConversationsHome() {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="blocked" className="py-3 rounded-none">Blocked</TabsTrigger>
-              <TabsTrigger value="add" className="py-3 rounded-none">Add Friends</TabsTrigger>
+              <TabsTrigger value="blocked" className="py-3 rounded-none">
+                Blocked
+              </TabsTrigger>
+              <TabsTrigger value="add" className="py-3 rounded-none">
+                Add Friends
+              </TabsTrigger>
             </TabsList>
 
             <div className="mt-4">
@@ -237,7 +284,8 @@ export default function ConversationsHome() {
                   ) : friendsData.friends?.length ? (
                     <div className="space-y-2">
                       {friendsData.friends.map((friend) =>
-                        renderUserCard(friend, (
+                        renderUserCard(
+                          friend,
                           <>
                             <Button
                               size="sm"
@@ -250,7 +298,10 @@ export default function ConversationsHome() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => friend.friendshipId && removeFriend(friend.friendshipId)}
+                              onClick={() =>
+                                friend.friendshipId &&
+                                removeFriend(friend.friendshipId)
+                              }
                               title="Remove Friend"
                             >
                               <UserMinus className="h-4 w-4" />
@@ -264,7 +315,7 @@ export default function ConversationsHome() {
                               <Ban className="h-4 w-4" />
                             </Button>
                           </>
-                        ))
+                        )
                       )}
                     </div>
                   ) : (
@@ -284,11 +335,18 @@ export default function ConversationsHome() {
                   ) : friendsData.pendingRequests?.length ? (
                     <div className="space-y-2">
                       {friendsData.pendingRequests.map((request) =>
-                        renderUserCard(request, (
+                        renderUserCard(
+                          request,
                           <>
                             <Button
                               size="sm"
-                              onClick={() => request.friendshipId && respondToFriendRequest(request.friendshipId, "accept")}
+                              onClick={() =>
+                                request.friendshipId &&
+                                respondToFriendRequest(
+                                  request.friendshipId,
+                                  "accept"
+                                )
+                              }
                               title="Accept"
                             >
                               <Check className="h-4 w-4" />
@@ -296,13 +354,19 @@ export default function ConversationsHome() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => request.friendshipId && respondToFriendRequest(request.friendshipId, "decline")}
+                              onClick={() =>
+                                request.friendshipId &&
+                                respondToFriendRequest(
+                                  request.friendshipId,
+                                  "decline"
+                                )
+                              }
                               title="Decline"
                             >
                               <X className="h-4 w-4" />
                             </Button>
                           </>
-                        ))
+                        )
                       )}
                     </div>
                   ) : (
@@ -322,16 +386,23 @@ export default function ConversationsHome() {
                   ) : friendsData.sentRequests?.length ? (
                     <div className="space-y-2">
                       {friendsData.sentRequests.map((request) =>
-                        renderUserCard(request, (
+                        renderUserCard(
+                          request,
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => request.friendshipId && respondToFriendRequest(request.friendshipId, "cancel")}
+                            onClick={() =>
+                              request.friendshipId &&
+                              respondToFriendRequest(
+                                request.friendshipId,
+                                "cancel"
+                              )
+                            }
                             title="Cancel Request"
                           >
                             Cancel
                           </Button>
-                        ))
+                        )
                       )}
                     </div>
                   ) : (
@@ -351,15 +422,19 @@ export default function ConversationsHome() {
                   ) : friendsData.blockedUsers?.length ? (
                     <div className="space-y-2">
                       {friendsData.blockedUsers.map((blockedUser) =>
-                        renderUserCard(blockedUser, (
+                        renderUserCard(
+                          blockedUser,
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => blockedUser.blockId && unblockUser(blockedUser.blockId)}
+                            onClick={() =>
+                              blockedUser.blockId &&
+                              unblockUser(blockedUser.blockId)
+                            }
                           >
                             Unblock
                           </Button>
-                        ))
+                        )
                       )}
                     </div>
                   ) : (
@@ -380,7 +455,7 @@ export default function ConversationsHome() {
                     className="pl-11"
                   />
                 </div>
-                
+
                 <ScrollArea className="h-80">
                   {searchLoading ? (
                     <div className="flex items-center justify-center h-32">
@@ -389,7 +464,8 @@ export default function ConversationsHome() {
                   ) : searchResults.length ? (
                     <div className="space-y-2">
                       {searchResults.map((user) =>
-                        renderUserCard(user, (
+                        renderUserCard(
+                          user,
                           <Button
                             size="sm"
                             onClick={() => sendFriendRequest(user.id)}
@@ -397,7 +473,7 @@ export default function ConversationsHome() {
                             <UserPlus className="h-4 w-4 mr-2" />
                             Add Friend
                           </Button>
-                        ))
+                        )
                       )}
                     </div>
                   ) : searchQuery.trim().length >= 2 ? (

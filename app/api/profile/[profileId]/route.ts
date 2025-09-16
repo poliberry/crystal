@@ -7,6 +7,7 @@ export async function GET(
   { params }: { params: { profileId: string } }
 ) {
   try {
+    const param = await params;
     const profile = await currentProfile();
     if (!profile) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -18,7 +19,7 @@ export async function GET(
     // Fetch the target user's profile
     const targetProfile = await db.profile.findUnique({
       where: {
-        id: params.profileId,
+        id: param.profileId,
       },
     });
 

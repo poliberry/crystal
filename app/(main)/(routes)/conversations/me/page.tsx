@@ -75,11 +75,12 @@ const PersonalSpacePage = async () => {
 
             <ChatInput
               name={otherMember.profile.name}
-              type="personal-space"
+              type="conversation"
               apiUrl="/api/socket/direct-messages"
               query={{
                 conversationId: conversation.id,
               }}
+              member={currentMember}
             />
           </>
       </div>
