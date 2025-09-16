@@ -135,7 +135,7 @@ export const EnhancedServerMember = ({ member, profile, server }: ServerMemberPr
       <button
         onClick={onClick}
         className={cn(
-          "group flex items-center gap-x-2 w-full p-2 transition mb-1 rounded-md hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50",
+          "group flex items-center gap-x-2.5 w-full p-1.5 transition rounded-md hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50",
           "relative",
           !presence.isOnline && "opacity-60"
         )}
@@ -144,7 +144,7 @@ export const EnhancedServerMember = ({ member, profile, server }: ServerMemberPr
           <UserAvatar 
             src={member.profile.imageUrl} 
             alt={member.profile.name}
-            className="h-8 w-8 md:h-8 md:w-8"
+            className="h-7 w-7 md:h-7 md:w-7"
           />
           {/* Status indicator */}
           <div className="absolute -bottom-0.5 -right-0.5">
@@ -153,7 +153,7 @@ export const EnhancedServerMember = ({ member, profile, server }: ServerMemberPr
         </div>
         
         <div className="flex flex-col items-start min-w-0 flex-1">
-          <div className="flex items-center gap-0 w-full">
+          <div className="flex items-center w-full">
             <p 
               className={cn(
                 "font-semibold text-sm truncate w-full text-left",
@@ -168,7 +168,7 @@ export const EnhancedServerMember = ({ member, profile, server }: ServerMemberPr
             
             {/* Owner crown */}
             {isOwner && (
-              <Crown className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+              <Crown className="h-4 w-4 mr-[-4px] text-yellow-500 flex-shrink-0" />
             )}
             
             {/* Legacy role icon (if no custom roles) */}
