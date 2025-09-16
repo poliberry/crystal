@@ -177,7 +177,7 @@ export const EnhancedServerMember = ({ member, profile, server }: ServerMemberPr
           
           {/* Custom status display */}
           {presence.customStatus && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate w-full">
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate w-full text-left">
               {presence.customStatus}
             </p>
           )}
