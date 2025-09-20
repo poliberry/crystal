@@ -48,7 +48,7 @@ export default async function handler(
           updatedProfile = newProfile;
           statusChanged = true;
         }
-      } else if (presenceStatus !== undefined && presenceStatus !== profile.presence_status) {
+      } else if (presenceStatus !== undefined && presenceStatus !== profile.presenceStatus) {
         const newProfile = await db.profile.update({
           where: { id: profile.id },
           data: { presenceStatus: presenceStatus }
@@ -70,13 +70,25 @@ export default async function handler(
             prevStatus: updatedProfile.prevStatus
           };
 
-          // Emit multiple events for compatibility
+          // Emit to global presence channel for conversations and general status
           await pusherServer.trigger("presence", "user:status:update", eventData);
           await pusherServer.trigger("presence", "user:presence:update", eventData);
           await pusherServer.trigger("presence", "presence-status-update", eventData);
           await pusherServer.trigger("presence", "members:poll", { timestamp: Date.now() });
 
-          console.log(`[DISCORD_STATUS_API] Updated presence via Pusher for ${profile.userId}:`, {
+          // Get user's servers and emit to server-specific channels
+          const userServers = await db.member.findMany({
+            where: { profileId: profile.id },
+            select: { serverId: true }
+          });
+
+          // Emit to each server the user is a member of
+          for (const member of userServers) {
+            await pusherServer.trigger(`presence-server-${member.serverId}`, "user-status-update", eventData);
+            await pusherServer.trigger(`presence-server-${member.serverId}`, "presence-update", eventData);
+          }
+
+          console.log(`[DISCORD_STATUS_API] Updated presence via Pusher for ${profile.userId} across ${userServers.length} servers:`, {
             status: profile.status + " -> " + updatedProfile.status,
             presenceStatus: (profile.presenceStatus || "") + " -> " + (updatedProfile.presenceStatus || "")
           });

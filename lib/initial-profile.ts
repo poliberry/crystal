@@ -10,10 +10,8 @@ export const initialProfile = async () => {
     if (!userId)
       return redirectToSignIn();
 
-    const profile = await db.profile.findUnique({
-      where: {
-        userId: userId as string,
-      },
+    const profile = await db.profile.findFirst({
+      userId: userId as string,
     });
 
     if (profile)
@@ -25,7 +23,7 @@ export const initialProfile = async () => {
         name: `${user?.username}`,
         imageUrl: `${user?.imageUrl}`,
         email: `${user?.emailAddresses[0].emailAddress}`,
-      },
+      }
     });
 
     return newProfile;

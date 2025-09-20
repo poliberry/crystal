@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 import { useLiveKit } from "@/components/providers/media-room-provider";
 import { UserDialog } from "@/components/user-dialog";
+import { usePusher } from "@/components/providers/pusher-provider";
 
 interface ConversationData {
   id: string;
@@ -51,6 +52,7 @@ export function ConversationRightSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const media = useLiveKit();
+  const { pusher, isConnected } = usePusher();
   const [conversation, setConversation] = useState<ConversationData | null>(null);
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [otherProfile, setOtherProfile] = useState<UserProfileData | null>(null);
@@ -129,6 +131,45 @@ export function ConversationRightSidebar() {
       fetchConversationData();
     }
   }, [pathname, currentProfile]);
+
+  // Listen for real-time status updates via Pusher
+  useEffect(() => {
+    if (!pusher || !isConnected || !otherProfile) return;
+
+    const channel = pusher.subscribe("presence");
+
+    const handleStatusUpdate = (data: { 
+      userId: string; 
+      status: UserStatus; 
+      presenceStatus?: string | null;
+      prevStatus?: UserStatus;
+    }) => {
+      // Update the other profile's status if this update is for them
+      if (data.userId === otherProfile.userId) {
+        console.log("[CONVERSATION_SIDEBAR] Received status update for other user:", data);
+        setOtherProfile(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: data.status,
+            presenceStatus: data.presenceStatus !== undefined ? data.presenceStatus : prev.presenceStatus
+          };
+        });
+      }
+    };
+
+    // Listen to multiple event types for comprehensive coverage
+    channel.bind("user:status:update", handleStatusUpdate);
+    channel.bind("user:presence:update", handleStatusUpdate);
+    channel.bind("presence-status-update", handleStatusUpdate);
+
+    return () => {
+      channel.unbind("user:status:update", handleStatusUpdate);
+      channel.unbind("user:presence:update", handleStatusUpdate);
+      channel.unbind("presence-status-update", handleStatusUpdate);
+      pusher.unsubscribe("presence");
+    };
+  }, [pusher, isConnected, otherProfile]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
@@ -293,6 +334,26 @@ export function ConversationRightSidebar() {
               @{otherProfile?.name}
               {otherProfile?.pronouns && ` | ${otherProfile.pronouns}`}
             </p>
+          </div>
+
+          {/* Status Display */}
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "w-3 h-3 rounded-full",
+                getStatusColor(otherProfile?.status as UserStatus)
+              )}
+            />
+            <div className="min-w-0 flex-1">
+              <span className="text-sm font-medium text-foreground">
+                {getStatusText(otherProfile?.status as UserStatus)}
+              </span>
+              {otherProfile?.presenceStatus && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {otherProfile.presenceStatus}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Bio */}

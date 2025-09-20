@@ -2,7 +2,8 @@ import { MemberRole } from "@prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
+import { ChannelQueries, MemberQueries } from "@/lib/scylla-queries";
+import { pusherServer } from "@/lib/pusher";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,32 +19,42 @@ export async function POST(req: NextRequest) {
     if (name === "general")
       return new NextResponse('Name cannot be "general".', { status: 400 });
 
-    const server = await db.server.update({
-      where: {
-        id: serverId,
-        members: {
-          some: {
-            profileId: profile.id,
-            role: {
-              in: [MemberRole.ADMIN, MemberRole.MODERATOR],
-            },
-          },
-        },
-      },
-      data: {
-        channels: {
-          create: {
-            profileId: profile.id,
-            position: 1,
-            categoryId: searchParams.get("categoryId") || undefined,
-            name,
-            type,
-          },
-        },
-      },
+    // Check if user has permission to create channels
+    const member = await MemberQueries.findByServerAndProfile(serverId, profile.id);
+    if (!member || (member.role !== 'ADMIN' && member.role !== 'MODERATOR')) {
+      return new NextResponse("Unauthorized", { status: 403 });
+    }
+
+    // Get current channels to determine position
+    const categoryId = searchParams.get("categoryId");
+    const existingChannels = await ChannelQueries.findByServerId(serverId);
+    
+    const maxPosition = existingChannels.length > 0 
+      ? Math.max(...existingChannels.map((ch: any) => ch.position || 0))
+      : 0;
+
+    // Create the new channel
+    const newChannel = await ChannelQueries.create({
+      name,
+      type: type || 'TEXT',
+      server_id: serverId as any,
+      category_id: categoryId ? (categoryId as any) : null,
+      profile_id: profile.id as any,
+      position: maxPosition + 1
     });
 
-    return NextResponse.json(server);
+    // Trigger Pusher event for live updates
+    try {
+      await pusherServer.trigger(`server-${serverId}`, "channels:created", {
+        channel: newChannel,
+        serverId,
+        categoryId: categoryId || null
+      });
+    } catch (pusherError) {
+      console.error("[PUSHER_ERROR] Failed to trigger channel creation event:", pusherError);
+    }
+
+    return NextResponse.json(newChannel);
   } catch (error: unknown) {
     console.error("[CHANNELS_POST]: ", error);
     return new NextResponse("Internal Server Error.", { status: 500 });

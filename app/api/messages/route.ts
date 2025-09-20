@@ -18,57 +18,40 @@ export async function GET(req: NextRequest) {
     if (!channelId)
       return new NextResponse("Channel ID is missing.", { status: 401 });
 
-    let messages = [];
+    console.log('[MESSAGES_GET] - channelId:', channelId, 'cursor:', cursor);
 
-    if (cursor) {
-      messages = await db.message.findMany({
-        take: MESSAGES_BATCH,
-        skip: 1,
-        cursor: {
-          id: cursor,
+    // For now, get basic messages without complex pagination
+    // TODO: Implement proper cursor-based pagination in ScyllaDB
+    const messages = await db.message.findMany(
+      { channelId },
+      { take: MESSAGES_BATCH }
+    );
+
+    console.log('[MESSAGES_GET] - found messages:', messages.length);
+
+    // For now, return simple messages without member/profile data
+    // TODO: Implement proper joins or separate queries for member data
+    const formattedMessages = messages.map((message: any) => ({
+      ...message,
+      member: {
+        id: message.memberId,
+        role: 'GUEST', // Default role for now
+        profile: {
+          id: profile.id,
+          name: 'User', // Default name for now
+          imageUrl: profile.imageUrl || '',
         },
-        where: {
-          channelId,
-        },
-        include: {
-          member: {
-            include: {
-              profile: true,
-            },
-          },
-          attachments: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-    } else {
-      messages = await db.message.findMany({
-        take: MESSAGES_BATCH,
-        where: {
-          channelId,
-        },
-        include: {
-          member: {
-            include: {
-              profile: true,
-            },
-          },
-          attachments: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-    }
+      },
+      attachments: [], // No attachments for now
+    }));
 
     let nextCursor = null;
-
-    if (messages.length === MESSAGES_BATCH)
-      nextCursor = messages[MESSAGES_BATCH - 1].id;
+    if (messages.length === MESSAGES_BATCH) {
+      nextCursor = messages[messages.length - 1].id;
+    }
 
     return NextResponse.json({
-      items: messages,
+      items: formattedMessages,
       nextCursor,
     });
   } catch (error: unknown) {

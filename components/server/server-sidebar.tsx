@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { PermissionManager } from "@/lib/permissions";
 import { PermissionType } from "@/types/permissions";
 
-import { ServerChannelList } from "./server-channel-list";
+import { ServerChannelListSimple } from "./server-channel-list-simple-buttons";
 import { ServerHeader } from "./server-header";
 import { ServerSearch } from "./server-search";
 import { SignedIn } from "@clerk/nextjs";
@@ -61,81 +61,165 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
 
   if (!profile) redirect("/");
 
-  const server = await db.server.findUnique({
-    where: {
-      id: serverId,
-    },
-    include: {
-      channels: {
-        orderBy: {
-          position: "asc",
-        },
-      },
-      members: {
-        include: {
-          profile: true,
-          // memberRoles: {
-          //   include: {
-          //     role: {
-          //       include: {
-          //         permissions: true
-          //       }
-          //     }
-          //   }
-          // }
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      categories: {
-        include: {
-          channels: {
-            orderBy: {
-              position: "asc",
-            },
-          },
-        },
-        orderBy: {
-          position: "asc",
-        },
-      },
-    },
+  // Get server details
+  const server = await db.server.findFirst({
+    id: serverId,
   });
 
   if (!server) redirect("/");
 
-  const textChannels = server?.channels.filter(
-    (channel) => channel.type === ChannelType.TEXT
+  // Get channels for this server (remove any potential sorting)
+  // For now, use Prisma to avoid DNS issues during build
+  // TODO: Migrate to ScyllaDB via API routes for better separation
+  let channels: any[] = [];
+  let categories: any[] = [];
+  let members: any[] = [];
+
+  try {
+    channels = await db.channel.findMany({
+      where: { serverId: serverId },
+    });
+    console.log('[ServerSidebar] Fetched channels:', channels?.length, channels);
+    console.log('[ServerSidebar] Channel types found:', channels?.map((c: any) => ({ name: c.name, type: c.type })));
+  } catch (error) {
+    console.error('Error fetching channels, using empty array:', error);
+    channels = [];
+  }
+
+  try {
+    categories = await db.category.findMany({
+      where: { serverId: serverId },
+    });
+    console.log('[ServerSidebar] Fetched categories:', categories?.length, categories);
+  } catch (error) {
+    console.error('Error fetching categories, using empty array:', error);
+    categories = [];
+  }
+
+  try {
+    members = await db.member.findMany({
+      where: { serverId: serverId },
+    });
+    console.log('[ServerSidebar] Fetched members:', members?.length, members);
+  } catch (error) {
+    console.error('Error fetching members, using empty array:', error);
+    members = [];
+  }
+
+  // For now, we'll skip the complex profile joins and role includes
+  // TODO: Implement proper joins when we add support for them
+
+  // Group channels by category and sort in JavaScript
+  const channelsByCategory = channels.reduce((acc: any, channel: any) => {
+    // Handle null, undefined, or empty string categoryId
+    const categoryId = (channel.categoryId && channel.categoryId.trim() !== '') ? channel.categoryId : 'uncategorized';
+    console.log('[ServerSidebar] Channel categorization:', {
+      channelId: channel.id,
+      channelName: channel.name,
+      channelType: channel.type,
+      originalCategoryId: channel.categoryId,
+      resolvedCategoryId: categoryId
+    });
+    if (!acc[categoryId]) {
+      acc[categoryId] = [];
+    }
+    acc[categoryId].push(channel);
+    return acc;
+  }, {});
+
+  console.log('[ServerSidebar] Channels by category:', channelsByCategory);
+  console.log('[ServerSidebar] Uncategorized channels:', channelsByCategory['uncategorized']);
+
+  // Sort channels within each category by position
+  Object.keys(channelsByCategory).forEach(categoryId => {
+    channelsByCategory[categoryId].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+  });
+
+  // Structure categories with their channels and sort categories by position
+  
+  const structuredCategories = [
+    // Uncategorized channels first
+    ...(channelsByCategory['uncategorized'] ? [{
+      id: 'uncategorized',
+      name: 'CHANNELS',
+      position: -1,
+      channels: channelsByCategory['uncategorized'] || []
+    }] : []),
+    // Then actual categories
+    ...categories
+      .sort((a: any, b: any) => (a.position || 0) - (b.position || 0)) // Sort categories by position
+      .map((category: any) => ({
+        id: category.id,
+        name: category.name.toUpperCase(),
+        position: category.position || 0,
+        channels: channelsByCategory[category.id] || []
+      }))
+  ];
+
+  // Fallback: if no structured categories but we have channels, create a simple structure
+  if (structuredCategories.length === 0 && channels.length > 0) {
+    
+    // Add TEXT channels
+    if (channels.some((channel: any) => channel.type === 'TEXT')) {
+      structuredCategories.push({
+        id: 'fallback-text',
+        name: 'TEXT CHANNELS',
+        position: 0,
+        channels: channels.filter((channel: any) => channel.type === 'TEXT')
+      });
+    }
+    
+    // Add AUDIO channels
+    if (channels.some((channel: any) => channel.type === 'AUDIO')) {
+      structuredCategories.push({
+        id: 'fallback-audio',
+        name: 'VOICE CHANNELS',
+        position: 1,
+        channels: channels.filter((channel: any) => channel.type === 'AUDIO')
+      });
+    }
+    
+    // Add VIDEO channels
+    if (channels.some((channel: any) => channel.type === 'VIDEO')) {
+      structuredCategories.push({
+        id: 'fallback-video',
+        name: 'VIDEO CHANNELS',
+        position: 2,
+        channels: channels.filter((channel: any) => channel.type === 'VIDEO')
+      });
+    }
+  }
+
+  console.log('[ServerSidebar] Final structured categories after fallback:', structuredCategories);
+
+  const textChannels = channels.filter(
+    (channel) => channel.type === 'TEXT'
   );
-  const audioChannels = server?.channels.filter(
-    (channel) => channel.type === ChannelType.AUDIO
+  const audioChannels = channels.filter(
+    (channel) => channel.type === 'AUDIO'
   );
-  const videoChannels = server?.channels.filter(
-    (channel) => channel.type === ChannelType.VIDEO
+  const videoChannels = channels.filter(
+    (channel) => channel.type === 'VIDEO'
   );
-  const members = server?.members.filter(
+  const filteredMembers = members.filter(
     (member) => member.profileId !== profile.id
   );
 
-  const currentMember = server.members.find(
+  const currentMember = members.find(
     (member) => member.profileId === profile.id
   );
   
   if (!currentMember) redirect("/");
 
-  // Get member permissions
-  const canManageChannels = await PermissionManager.hasPermission(
-    currentMember.id,
-    PermissionType.MANAGE_CHANNELS
-  );
+  // Simplified permission check for now
+  const canManageChannels = currentMember.role === 'ADMIN' || currentMember.role === 'MODERATOR';
   
   return (
     <div className="flex flex-col h-full text-primary w-full bg-transparent border-r border-l border-muted">
       <ServerHeader 
         server={server} 
         member={currentMember}
-        canManageChannels={canManageChannels.granted}
+        canManageChannels={canManageChannels}
       />
       <ScrollArea className="flex-1 px-3 backdrop-blur-2xl bg-white/20 dark:bg-black/20 pt-4 -mt-4">
         <div className="mt-2">
@@ -147,7 +231,7 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
                 data: textChannels?.map((channel) => ({
                   id: channel.id,
                   name: channel.name,
-                  icon: iconMap[channel.type],
+                  icon: iconMap[channel.type as keyof typeof iconMap],
                 })),
               },
               {
@@ -156,7 +240,7 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
                 data: audioChannels?.map((channel) => ({
                   id: channel.id,
                   name: channel.name,
-                  icon: iconMap[channel.type],
+                  icon: iconMap[channel.type as keyof typeof iconMap],
                 })),
               },
               {
@@ -165,15 +249,15 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
                 data: videoChannels?.map((channel) => ({
                   id: channel.id,
                   name: channel.name,
-                  icon: iconMap[channel.type],
+                  icon: iconMap[channel.type as keyof typeof iconMap],
                 })),
               },
               {
                 label: "Members",
                 type: "member",
-                data: members?.map((member) => ({
+                data: filteredMembers?.map((member) => ({
                   id: member.id,
-                  name: member.profile.name,
+                  name: `Member ${member.id.slice(0, 8)}`, // Temporary until we add profile joins
                   icon: getRoleIcon(member),
                 })),
               },
@@ -182,10 +266,10 @@ export const ServerSidebar = async ({ serverId }: ServerSidebarProps) => {
 
           <Separator className="bg-zinc-200 dark:bg-zinc-700 rounded-md my-2" />
           <div className="mb-2">
-            <ServerChannelList
-              categories={server.categories}
+            <ServerChannelListSimple
+              categories={structuredCategories}
               member={currentMember}
-              server={server}
+              server={{ ...server, members: [] } as any} // Simplified server object
             />
           </div>
         </div>

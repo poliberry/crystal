@@ -14,7 +14,7 @@ export interface PermissionOverride {
 // Permission check result
 export interface PermissionCheckResult {
   granted: boolean;
-  reason: 'ADMINISTRATOR' | 'ROLE' | 'USER_OVERRIDE' | 'DENIED' | 'LEGACY_ADMIN';
+  reason: 'ADMINISTRATOR' | 'ROLE' | 'USER_OVERRIDE' | 'DENIED' | 'LEGACY_ADMIN' | 'SERVER_OWNER';
   source?: string; // Role ID or other source
 }
 

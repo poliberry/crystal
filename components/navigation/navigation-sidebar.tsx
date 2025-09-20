@@ -20,15 +20,35 @@ export const NavigationSidebar = async () => {
 
   if (!profile) redirect("/");
 
-  const servers = await db.server.findMany({
-    where: {
-      members: {
-        some: {
-          profileId: profile.id,
-        },
-      },
-    },
-  });
+  console.log('Navigation sidebar - profile:', profile);
+
+  // First get all memberships for this profile
+  let servers = [];
+  try {
+    console.log('Fetching members for profile:', profile.id);
+    const members = await db.member.findMany({
+      profileId: profile.id,
+    });
+    console.log('Found members:', members);
+
+    // Then get the servers for those memberships
+    for (const member of members) {
+      console.log('Fetching server for member:', member.serverId);
+      const server = await db.server.findFirst({
+        id: member.serverId,
+      });
+      console.log('Found server:', server);
+      if (server) {
+        servers.push(server);
+      }
+    }
+    
+    console.log('Final servers list:', servers);
+  } catch (error) {
+    console.error('Error loading servers in navigation:', error);
+    // Return empty servers array on error
+    servers = [];
+  }
 
   const CARD_HEIGHT = 499;
 

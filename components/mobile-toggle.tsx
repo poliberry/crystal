@@ -1,10 +1,13 @@
+"use client";
+
 import { Menu } from "lucide-react";
 
 import { NavigationSidebar } from "@/components/navigation/navigation-sidebar";
-import { ServerSidebar } from "@/components/server/server-sidebar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
+// TODO: Create a client-side version of ServerSidebar for mobile
+// For now, we'll disable the server sidebar in mobile view
 export const MobileToggle = ({ serverId }: { serverId: string }) => {
   return (
     <Sheet>
@@ -19,7 +22,9 @@ export const MobileToggle = ({ serverId }: { serverId: string }) => {
           <NavigationSidebar />
         </div>
 
-        <ServerSidebar serverId={serverId} />
+        <div className="p-4">
+          <p className="text-sm text-muted-foreground">Mobile server sidebar coming soon...</p>
+        </div>
       </SheetContent>
     </Sheet>
   );

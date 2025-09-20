@@ -19,10 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useModal } from "@/hooks/use-modal-store";
+import { useCrystalPermissions } from "@/hooks/use-crystal-permissions";
 import type { ServerWithMembersWithProfiles } from "@/types";
 import { Card, CardContent } from "../ui/card";
-import { PermissionType } from "@/types/permissions";
-import { useServerPermissions } from "@/hooks/use-permissions";
 
 type ServerHeaderProps = {
   server: ServerWithMembersWithProfiles;
@@ -33,14 +32,20 @@ type ServerHeaderProps = {
 export const ServerHeader = ({ server, member, canManageChannels }: ServerHeaderProps) => {
   const { onOpen } = useModal();
   
-  const permissions = useServerPermissions(member?.id || '');
+  // Debug logging
+  console.log('[ServerHeader] Member prop:', member);
+  console.log('[ServerHeader] Member ID:', member?.id);
   
-  // Extract permission checks for easier use
-  const canManageServer = permissions.getPermission(PermissionType.MANAGE_SERVER).granted;
-  const canManageChannelsCheck = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
-  const canManageRoles = permissions.getPermission(PermissionType.MANAGE_ROLES).granted;
-  const canCreateInvite = permissions.getPermission(PermissionType.CREATE_INSTANT_INVITE).granted;
-  const isAdmin = permissions.getPermission(PermissionType.ADMINISTRATOR).granted;
+  // Use the new Crystal permission system
+  const { permissions, loading } = useCrystalPermissions(member?.id);
+
+  if (loading) {
+    return (
+      <div className="relative w-full max-w-md h-32 overflow-hidden z-[10]">
+        <div className="absolute inset-0 bg-gray-200 dark:bg-gray-800 animate-pulse rounded" />
+      </div>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -69,7 +74,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
       </DropdownMenuTrigger>
 
       <DropdownMenuContent className="w-56 text-xs font-medium text-black dark:text-neutral-400 space-y-[2px]">
-        {canCreateInvite && (
+        {permissions.canInviteMembers && (
           <DropdownMenuItem
             onClick={() => onOpen("invite", { server })}
             className="text-indigo-600 dark:text-indigo-400 px-3 py-2 text-sm cursor-pointer"
@@ -78,7 +83,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
             <UserPlus className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {canManageServer && (
+        {permissions.canManageServer && (
           <DropdownMenuItem
             onClick={() => onOpen("enhancedServerSettings", { server, currentMember: member })}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -87,7 +92,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
             <Settings className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {canManageRoles && (
+        {permissions.canManageMembers && (
           <DropdownMenuItem
             onClick={() => onOpen("members", { server })}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -96,7 +101,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
             <Users className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {canManageChannelsCheck && (
+        {permissions.canCreateChannels && (
           <DropdownMenuItem
             onClick={() => onOpen("createChannel")}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -105,7 +110,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
             <PlusCircle className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {canManageChannelsCheck && (
+        {permissions.canManageCategories && (
           <DropdownMenuItem
             onClick={() => onOpen("createCategory")}
             className="px-3 py-2 text-sm cursor-pointer"
@@ -114,8 +119,8 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
             <FolderPlus className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {(canManageChannelsCheck || canManageServer || canManageRoles) && <DropdownMenuSeparator />}
-        {isAdmin && (
+        {(permissions.canManageChannels || permissions.canManageServer || permissions.canManageMembers) && <DropdownMenuSeparator />}
+        {(permissions.canDeleteServer || permissions.isServerOwner) && (
           <DropdownMenuItem
             onClick={() => onOpen("deleteServer", { server })}
             className="text-rose-500 px-3 py-2 text-sm cursor-pointer"
@@ -124,7 +129,7 @@ export const ServerHeader = ({ server, member, canManageChannels }: ServerHeader
             <Trash className="h-4 w-4 ml-auto" />
           </DropdownMenuItem>
         )}
-        {!isAdmin && (
+        {!permissions.isServerOwner && !permissions.isAdmin && (
           <DropdownMenuItem
             onClick={() => onOpen("leaveServer", { server })}
             className="text-rose-500 px-3 py-2 text-sm cursor-pointer"

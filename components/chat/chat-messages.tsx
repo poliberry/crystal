@@ -20,7 +20,7 @@ const DATE_FORMAT = "D MMM YYYY, HH:mm";
 
 type ChatMessagesProps = {
   name: string;
-  member: Member;
+  member: any;
   chatId: string;
   apiUrl: string;
   socketUrl: string;

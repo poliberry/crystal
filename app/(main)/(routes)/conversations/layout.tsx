@@ -3,36 +3,22 @@ import { redirect } from "next/navigation";
 import type { PropsWithChildren } from "react";
 
 import { ServerSidebar } from "@/components/server/server-sidebar";
-import { initialProfile } from "@/lib/initial-profile";
+import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 import { MemberSidebar } from "@/components/server/member-sidebar";
 import React from "react";
 import { ConversationSidebar } from "@/components/conversation/conversation-sidebar";
 
 const ConversationsLayout = async ({ children }: { children: React.ReactNode }) => {
-  const profile = await initialProfile();
+  const profile = await currentProfile();
   const user = await currentUser();
 
   if (!profile) {
     return redirectToSignIn({ returnBackUrl: "/conversations" });
   }
 
-  // Update profile with latest user data
-  try {
-    await db.profile.update({
-      where: {
-        id: profile.id,
-      },
-      data: {
-        name: `${user?.username}`,
-        imageUrl: `${user?.imageUrl}`,
-        email: `${user?.emailAddresses[0].emailAddress}`
-      }
-    });
-  } catch (error) {
-    console.error("Failed to update profile:", error);
-    // Continue without failing, profile creation was successful
-  }
+  // Temporarily disable profile update to debug UUID issue
+  // TODO: Re-enable after fixing UUID conversion issue
 
   return (
     <div className="h-full flex flex-row overflow-hidden pointer-events-auto">

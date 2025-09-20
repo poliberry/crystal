@@ -16,7 +16,7 @@ import { type ModalType, useModal } from "@/hooks/use-modal-store";
 import { cn } from "@/lib/utils";
 import { useLiveKit } from "../providers/media-room-provider";
 import { currentProfile } from "@/lib/current-profile";
-import { currentUser, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../ui/context-menu";
 import { useLocalParticipant, useRemoteParticipants } from "@livekit/components-react";
 import { Avatar, AvatarFallback } from "../ui/avatar";

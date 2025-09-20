@@ -10,20 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AnnouncementChannelProps {
-  channel: {
-    id: string;
-    name: string;
-    serverId: string;
-    type: ChannelType;
-  };
-  member: {
-    id: string;
-    role: MemberRole;
-    profileId: string;
-    serverId: string;
-    createdAt: Date;
-    updatedAt: Date;
-  };
+  channel: any;
+  member: any;
   chatId: string;
   apiUrl: string;
   socketUrl: string;

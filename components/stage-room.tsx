@@ -20,9 +20,9 @@ import { useLiveKit } from "./providers/media-room-provider";
 import { useSocket } from "./providers/socket-provider";
 
 interface StageRoomProps {
-  channel: Channel;
+  channel: any;
   server: Server;
-  member: Member;
+  member: any;
   chatId: string;
   apiUrl: string;
   socketUrl: string;

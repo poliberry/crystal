@@ -14,6 +14,9 @@ import {
   Radio,
   Volume2,
   Megaphone,
+  ChevronUp,
+  ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -22,7 +25,7 @@ import { type ModalType, useModal } from "@/hooks/use-modal-store";
 import { cn } from "@/lib/utils";
 import { useLiveKit } from "../providers/media-room-provider";
 import { currentProfile } from "@/lib/current-profile";
-import { currentUser, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -30,6 +33,14 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { Button } from "../ui/button";
 import {
   useLocalParticipant,
   useRemoteParticipants,
@@ -43,12 +54,17 @@ import { useSocket } from "../providers/pusher-provider";
 import { NotificationBadge } from "../notification-badge";
 import { UnreadDot } from "../unread-dot";
 import { PermissionType } from "@/types/permissions";
-import { useServerPermissions } from "@/hooks/use-permissions";
+import { useCrystalPermissions } from "@/hooks/use-crystal-permissions";
 
 type ServerChannelProps = {
   channel: Channel;
   server: Server;
   member?: any;
+  categoryId?: string;
+  channelIndex?: number;
+  totalChannelsInCategory?: number;
+  onMoveUp?: (channelId: string, categoryId: string, currentIndex: number) => void;
+  onMoveDown?: (channelId: string, categoryId: string, currentIndex: number) => void;
 };
 
 const iconMap = {
@@ -63,6 +79,11 @@ export const ServerChannel = ({
   channel,
   server,
   member,
+  categoryId,
+  channelIndex = 0,
+  totalChannelsInCategory = 1,
+  onMoveUp,
+  onMoveDown,
 }: ServerChannelProps) => {
   const { onOpen } = useModal();
   const params = useParams();
@@ -72,11 +93,11 @@ export const ServerChannel = ({
   const { socket } = useSocket();
   const [users, setUsers] = useState<any[]>([]);
   
-  const permissions = useServerPermissions(member?.id || '');
+  const { permissions, loading } = useCrystalPermissions(member?.id);
   
   // Extract permission checks for easier use
-  const canManageChannels = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
-  const canViewChannels = permissions.getPermission(PermissionType.VIEW_CHANNELS).granted;
+  const canManageChannels = permissions.canManageChannels;
+  const canViewChannels = permissions.canViewChannels;
 
   const getConnectedUsers = async () => {
     const res = await fetch(`/api/rooms?room=${channel.id}`);
@@ -180,6 +201,69 @@ export const ServerChannel = ({
                     {channel.name}
                   </p>
                 </div>
+                {canManageChannels && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {channelIndex > 0 && onMoveUp && categoryId && (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('Move Up clicked - Category ID:', categoryId, 'Is fallback?', categoryId.startsWith('fallback-'));
+                            onMoveUp(channel.id, categoryId, channelIndex);
+                          }}
+                        >
+                          <ChevronUp className="w-4 h-4 mr-2" />
+                          Move Up
+                        </DropdownMenuItem>
+                      )}
+                      {channelIndex < totalChannelsInCategory - 1 && onMoveDown && categoryId && (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('Move Down clicked - Category ID:', categoryId, 'Is fallback?', categoryId.startsWith('fallback-'));
+                            onMoveDown(channel.id, categoryId, channelIndex);
+                          }}
+                        >
+                          <ChevronDown className="w-4 h-4 mr-2" />
+                          Move Down
+                        </DropdownMenuItem>
+                      )}
+                      {((channelIndex > 0 && onMoveUp) || (channelIndex < totalChannelsInCategory - 1 && onMoveDown)) && (
+                        <DropdownMenuSeparator />
+                      )}
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAction(e, "editChannel");
+                        }}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Channel
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-red-500"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAction(e, "deleteChannel");
+                        }}
+                      >
+                        <Trash className="w-4 h-4 mr-2" />
+                        Delete Channel
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
               {media.connected &&
                 (channel.type === ChannelType.AUDIO || (channel.type as any) === "STAGE") &&
@@ -257,7 +341,31 @@ export const ServerChannel = ({
       <ContextMenuContent>
         {canManageChannels && (
           <>
+            {channelIndex > 0 && onMoveUp && categoryId && (
+              <ContextMenuItem onClick={(e) => {
+                e.stopPropagation();
+                console.log('Context Move Up clicked - Category ID:', categoryId, 'Is fallback?', categoryId.startsWith('fallback-'));
+                onMoveUp(channel.id, categoryId, channelIndex);
+              }}>
+                <ChevronUp className="w-4 h-4 mr-2" />
+                Move Up
+              </ContextMenuItem>
+            )}
+            {channelIndex < totalChannelsInCategory - 1 && onMoveDown && categoryId && (
+              <ContextMenuItem onClick={(e) => {
+                e.stopPropagation();
+                console.log('Context Move Down clicked - Category ID:', categoryId, 'Is fallback?', categoryId.startsWith('fallback-'));
+                onMoveDown(channel.id, categoryId, channelIndex);
+              }}>
+                <ChevronDown className="w-4 h-4 mr-2" />
+                Move Down
+              </ContextMenuItem>
+            )}
+            {((channelIndex > 0 && onMoveUp) || (channelIndex < totalChannelsInCategory - 1 && onMoveDown)) && (
+              <ContextMenuSeparator />
+            )}
             <ContextMenuItem onClick={(e) => onAction(e, "editChannel")}>
+              <Edit className="w-4 h-4 mr-2" />
               Edit Channel
             </ContextMenuItem>
             <ContextMenuSeparator />
@@ -265,6 +373,7 @@ export const ServerChannel = ({
               className="text-red-500"
               onClick={(e) => onAction(e, "deleteChannel")}
             >
+              <Trash className="w-4 h-4 mr-2" />
               Delete Channel
             </ContextMenuItem>
           </>

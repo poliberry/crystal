@@ -13,7 +13,7 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import clsx from "clsx";
 import { EmojiPicker } from "../emoji-picker";
 import { PermissionType, PermissionScope } from "@prisma/client";
-import { useChannelPermissions, useServerPermissions } from "@/hooks/use-simple-permissions";
+import { useCrystalPermissions } from "@/hooks/use-crystal-permissions";
 
 const formSchema = z.object({
   content: z.string().optional(),
@@ -40,44 +40,25 @@ type ChatInputProps = {
 export const ChatInput = ({ apiUrl, query, name, type, member, channelId }: ChatInputProps) => {
   const [isDragging, setIsDragging] = useState(false);
   
-  // Try to use permissions system with fallback
-  let permissions: any = null;
-  let permissionsError = false;
-  
-  try {
-    // Use appropriate permissions hook based on type
-    const channelPermissions = useChannelPermissions(member?.id || '', channelId || '');
-    const serverPermissions = useServerPermissions(member?.id || '');
-    permissions = type === "channel" ? channelPermissions : serverPermissions;
-  } catch (error) {
-    console.error('Permissions hook error:', error);
-    permissionsError = true;
-  }
+  // Use Crystal permission system
+  const { permissions, loading } = useCrystalPermissions(member?.id);
   
   // Permission checks
   let canSendMessages = true; // Default to allow
   let canAttachFiles = true;
   let canUseExternalEmojis = true;
   
-  if (!permissionsError && permissions && member?.id && !permissions.loading) {
-    try {
-      if (type === "conversation") {
-        // For conversations, always allow
-        canSendMessages = true;
-        canAttachFiles = true;
-        canUseExternalEmojis = true;
-      } else {
-        // For channels, check permissions properly
-        canSendMessages = permissions.isAdmin || permissions.canSendMessages;
-        canAttachFiles = permissions.isAdmin || permissions.hasPermission?.(PermissionType.ATTACH_FILES, PermissionScope.CHANNEL, channelId)?.granted || false;
-        canUseExternalEmojis = permissions.isAdmin || permissions.hasPermission?.(PermissionType.USE_EXTERNAL_EMOJIS, PermissionScope.CHANNEL, channelId)?.granted || false;
-      }
-    } catch (error) {
-      console.error('Permission calculation error:', error);
-      // Fallback to admin check only
-      canSendMessages = permissions?.isAdmin || true;
-      canAttachFiles = permissions?.isAdmin || true;
-      canUseExternalEmojis = permissions?.isAdmin || true;
+  if (!loading && member?.id) {
+    if (type === "conversation") {
+      // For conversations, always allow
+      canSendMessages = true;
+      canAttachFiles = true;
+      canUseExternalEmojis = true;
+    } else {
+      // For channels, check Crystal permissions
+      canSendMessages = permissions.canSendMessages;
+      canAttachFiles = permissions.canSendMessages; // If can send messages, can attach
+      canUseExternalEmojis = permissions.canSendMessages; // If can send messages, can use emojis
     }
   }
   
@@ -86,10 +67,8 @@ export const ChatInput = ({ apiUrl, query, name, type, member, channelId }: Chat
     type,
     memberId: member?.id,
     channelId,
-    permissionsError,
-    hasPermissions: !!permissions,
-    loading: permissions?.loading,
-    isAdmin: permissions?.isAdmin,
+    loading,
+    isAdmin: permissions.isAdmin,
     canSendMessages,
     canAttachFiles,
     canUseExternalEmojis

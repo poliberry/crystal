@@ -9,7 +9,7 @@ import { MediaRoom } from "@/components/media-room";
 import { StageRoom } from "@/components/stage-room";
 import { AnnouncementChannel } from "@/components/announcement-channel";
 import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
+import { db } from "@/lib/db.server";
 import { FloatingCallCard } from "@/components/call-ui";
 import { GlobalDropzone } from "@/components/chat/global-dropzone";
 import { Metadata } from "next";
@@ -32,16 +32,12 @@ export async function generateMetadata({
 
   if (!profile) return redirectToSignIn();
 
-  const server = await db.server.findUnique({
-    where: {
-      id: params.serverId,
-    },
+  const server = await db.server.findFirst({
+    id: params.serverId,
   });
 
-  const channel = await db.channel.findUnique({
-    where: {
-      id: params.channelId,
-    },
+  const channel = await db.channel.findFirst({
+    id: params.channelId,
   });
 
   const channelPrefix = channel?.type !== ChannelType.AUDIO && (channel?.type as any) !== "STAGE" ? "#" : "";
@@ -57,23 +53,17 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
 
   if (!profile) return redirectToSignIn();
 
-  const server = await db.server.findUnique({
-    where: {
-      id: params.serverId,
-    },
+  const server = await db.server.findFirst({
+    id: params.serverId,
   });
 
-  const channel = await db.channel.findUnique({
-    where: {
-      id: params.channelId,
-    },
+  const channel = await db.channel.findFirst({
+    id: params.channelId,
   });
 
   const member = await db.member.findFirst({
-    where: {
-      serverId: params.serverId,
-      profileId: profile.id,
-    },
+    serverId: params.serverId,
+    profileId: profile.id,
   });
 
   if (!channel || !member || !server) redirect("/");

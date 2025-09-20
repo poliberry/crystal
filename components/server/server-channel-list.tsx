@@ -9,7 +9,7 @@ import type { ServerWithMembersWithProfiles } from "@/types";
 import { ServerChannel } from "./server-channel";
 import { ServerSection } from "./server-section";
 import { PermissionType } from "@/types/permissions";
-import { useServerPermissions } from "@/hooks/use-permissions";
+import { useCrystalPermissions } from "@/hooks/use-crystal-permissions";
 
 // Types
 interface Category {
@@ -142,11 +142,11 @@ const DraggableCategory = ({
 export const ServerChannelList = ({ categories, member, server }: ServerChannelListProps) => {
     const router = useRouter();
     
-    const permissions = useServerPermissions(member?.id || '');
+    const { permissions, loading } = useCrystalPermissions(member?.id);
     
     // Extract permission checks for easier use
-    const canManageChannels = permissions.getPermission(PermissionType.MANAGE_CHANNELS).granted;
-    const canViewChannels = permissions.getPermission(PermissionType.VIEW_CHANNELS).granted;
+    const canManageChannels = permissions.canManageChannels;
+    const canViewChannels = permissions.canViewChannels;
 
     const handleDragEnd = useCallback(async (result: DropResult) => {
         const { destination, source, type, draggableId } = result;
@@ -254,6 +254,11 @@ export const ServerChannelList = ({ categories, member, server }: ServerChannelL
             console.error('Error in drag operation:', error);
         }
     }, [categories, server.id, router]);
+
+    // Show loading state while permissions are being fetched
+    if (loading) {
+        return <div className="text-center text-muted-foreground">Loading channels...</div>;
+    }
 
     return (
         <DragDropContext onDragEnd={handleDragEnd}>

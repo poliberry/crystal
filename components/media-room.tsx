@@ -50,7 +50,7 @@ import { Badge } from "./ui/badge";
 import { useSocket } from "./providers/socket-provider";
 
 type MediaRoomProps = {
-  channel: Channel;
+  channel: any;
   server: Server | null;
 };
 

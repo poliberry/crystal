@@ -5,54 +5,65 @@ import type { PropsWithChildren } from "react";
 import { ServerSidebar } from "@/components/server/server-sidebar";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
-import { MemberSidebar } from "@/components/server/member-sidebar";
 import { MemberSidebarWrapper } from "@/components/server/member-sidebar-wrapper";
 
 const ServerIdLayout = async ({
   children,
   params,
 }: PropsWithChildren<{
-  params: {
+  params: Promise<{
     serverId: string;
-  };
+  }>;
 }>) => {
+  // Await params first
+  const { serverId } = await params;
+  console.log('ServerIdLayout - serverId:', serverId);
+  
   const profile = await currentProfile();
-  const user = await currentUser();
 
   if (!profile) return redirectToSignIn();
 
-  await db.profile.update({
-    where: {
-      userId: profile.userId,
-    },
-    data: {
-      name: `${user?.username}`,
-      imageUrl: `${user?.imageUrl}`,
-      email: `${user?.emailAddresses[0].emailAddress}`
-    }
-  })
+  console.log('ServerIdLayout - profile:', profile);
 
-  const server = await db.server.findUnique({
-    where: {
-      id: params.serverId,
-      members: {
-        some: {
-          profileId: profile.id,
-        },
-      },
-    },
+  // Check if user is a member of this server
+  console.log('ServerIdLayout - checking membership for:', { serverId: serverId, profileId: profile.id });
+  const member = await db.member.findFirst({
+    serverId: serverId,
+    profileId: profile.id,
   });
 
-  if (!server) redirect("/");
+  console.log('ServerIdLayout - member found:', member);
+
+  if (!member) {
+    console.log('ServerIdLayout - no member found, redirecting to /');
+    redirect("/");
+  }
+
+  // Get the server details
+  console.log('ServerIdLayout - fetching server:', serverId);
+  const server = await db.server.findFirst({
+    id: serverId,
+  });
+
+  console.log('ServerIdLayout - server found:', server);
+
+  if (!server) {
+    console.log('ServerIdLayout - no server found, redirecting to /');
+    redirect("/");
+  }
 
   return (
     <div className="h-full flex flex-row overflow-hidden pointer-events-auto bg-gradient-to-b from-black to-[#000226]">
       <aside className="md:flex h-full w-96 flex-col inset-y-0 z-[10]">
-        <ServerSidebar serverId={params.serverId} />
+        <ServerSidebar serverId={server.id} />
       </aside>
-      <main className="h-full w-full z-[20]">{children}</main>
-      <aside className="md:flex h-full w-72 flex-col right-0 z-[10] inset-y-0">
-        <MemberSidebarWrapper serverId={params.serverId} />
+      
+      <main className="h-full flex-1 bg-white dark:bg-[#313338] rounded-l-3xl overflow-hidden">
+        {children}
+      </main>
+      
+      <aside className="md:flex hidden h-full w-96 flex-col inset-y-0 z-[10]">
+        <MemberSidebarWrapper serverId={server.id} />
       </aside>
     </div>
   );
