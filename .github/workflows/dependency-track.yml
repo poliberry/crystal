@@ -12,11 +12,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install CycloneDX NPM tool
-        run: npm install -g cyclonedx-bom
+      - name: Install Corepak
+        run: npm install -g corepack
+
+      - name: Install Yarn v4
+        run: npm install -g yarn
+
+      - name: Install CycloneDX BOM Plugin
+        run: yarn plugin import https://github.com/CycloneDX/cyclonedx-node-yarn/releases/latest/download/yarn-plugin-cyclonedx.cjs
 
       - name: Generate SBOM
-        run: cyclone-dx bom.json
+        run: yarn cyclonedx --output-file bom.json
 
       - name: Upload SBOM to Dependency-Track
         uses: DependencyTrack/gh-upload-sbom@v3.1.0
