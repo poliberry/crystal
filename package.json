@@ -1,30 +1,27 @@
 {
-  "name": "discord-clone",
-  "version": "1.0.4",
+  "name": "polichat",
+  "version": "prod",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate"
+    "scylla:init": "node lib/scylla-init.js",
+    "scylla:migrate": "npx ts-node lib/scylla-migrate.ts",
+    "scylla:test": "USE_SCYLLA=true npm run dev",
+    "test:scylla": "npx ts-node --project tsconfig.json test-scylla.ts"
   },
   "engines": {
     "node": ">=20.11.0"
   },
-  "author": {
-    "name": "Sanidhya Kumar Verma",
-    "email": "sanidhya.verma12345@gmail.com",
-    "url": "https://github.com/sanidhyy"
-  },
-  "description": "Real-time chat, voice, and community features in a modern, scalable Next.js 14-powered platform.",
+  "description": "Private. Secure. Open source. Its the new way to chat online.",
   "dependencies": {
     "@clerk/nextjs": "^4.31.8",
     "@clerk/themes": "^1.7.10",
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
     "@emoji-mart/data": "^1.1.2",
     "@emoji-mart/react": "^1.1.1",
+    "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.3.4",
     "@livekit/components-core": "^0.12.9",
     "@livekit/components-react": "^2.0.5",
@@ -44,7 +41,7 @@
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-switch": "^1.2.5",
-    "@radix-ui/react-tabs": "^1.1.12",
+    "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.0.7",
     "@react-three/drei": "^10.5.1",
     "@react-three/fiber": "^9.2.0",
@@ -52,11 +49,13 @@
     "@types/three": "^0.178.1",
     "@uploadthing/react": "^6.4.1",
     "axios": "^1.7.4",
+    "cassandra-driver": "^4.8.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cmdk": "^1.0.0",
     "css-tree": "^3.1.0",
     "dayjs": "^1.11.13",
+    "dotenv": "^17.2.2",
     "emoji-mart": "^5.5.2",
     "framer-motion": "^12.23.12",
     "livekit-client": "^2.15.3",
@@ -68,6 +67,8 @@
     "nprogress": "^0.2.0",
     "ogl": "^1.0.11",
     "open-graph-scraper": "^6.10.0",
+    "pusher": "^5.2.0",
+    "pusher-js": "^8.4.0",
     "query-string": "^9.0.0",
     "react": "^18",
     "react-dom": "^18",
@@ -97,6 +98,8 @@
     "postcss": "^8",
     "prisma": "^5.11.0",
     "tailwindcss": "^3.3.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
-  }
+  },
+  "packageManager": "yarn@4.10.3"
 }
