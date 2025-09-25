@@ -12,11 +12,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Corepak
+      - name: Install Corepack
         run: npm install -g corepack
 
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Install Yarn v4
-        run: npm install -g yarn
+        run: corepack prepare yarn@4 --activate
 
       - name: Install CycloneDX BOM Plugin
         run: yarn plugin import https://github.com/CycloneDX/cyclonedx-node-yarn/releases/latest/download/yarn-plugin-cyclonedx.cjs
