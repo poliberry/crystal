@@ -25,7 +25,7 @@ jobs:
         run: yarn plugin import https://github.com/CycloneDX/cyclonedx-node-yarn/releases/latest/download/yarn-plugin-cyclonedx.cjs
 
       - name: Install repository modules
-        run: yarn install
+        run: yarn install --frozen-lockfile
 
       - name: Generate SBOM
         run: yarn cyclonedx --output-file bom.json
