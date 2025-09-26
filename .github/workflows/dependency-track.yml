@@ -36,9 +36,9 @@ jobs:
       - name: Upload SBOM to Dependency-Track
         uses: DependencyTrack/gh-upload-sbom@v3.1.0
         with:
-          serverUrl: ${{ secrets.DT_SERVER_URL }}
-          apiKey: ${{ secrets.DT_API_KEY }}
-          projectName: polichat
-          bomFile: bom.json
+          serverhostname: ${{ secrets.DT_SERVER_URL }}
+          apikey: ${{ secrets.DT_API_KEY }}
+          projectname: polichat
+          bomfilename: bom.json
           port: 8080
           protocol: http
