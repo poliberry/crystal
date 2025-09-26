@@ -28,7 +28,7 @@ jobs:
         run: yarn cache clean --all
 
       - name: Install repository modules
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Generate SBOM
         run: yarn cyclonedx --output-file bom.json
