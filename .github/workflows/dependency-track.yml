@@ -34,7 +34,7 @@ jobs:
         run: yarn cyclonedx --output-file bom.json
 
       - name: Upload SBOM to Dependency-Track
-        uses: DependencyTrack/gh-upload-sbom@v3.1.0
+        uses: DependencyTrack/gh-upload-sbom@v3
         with:
           serverHostname: ${{ secrets.DT_SERVER_URL }}
           apiKey: ${{ secrets.DT_API_KEY }}
