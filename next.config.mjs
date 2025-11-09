@@ -15,11 +15,17 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   devIndicators: false,
-  webpack: (config, { isServer, dev }) => {
-    // Don't optimize these packages
-    config.externals = config.externals || [];
-    
+  webpack: (config, { isServer }) => {
     if (!isServer) {
+      // Prevent client-side loading of prisma
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '.prisma/client/index-browser': false,
+        '@prisma/client/index-browser': false,
+        '@prisma/client': false,
+      };
+      
+      // Handle Node.js specific modules
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,

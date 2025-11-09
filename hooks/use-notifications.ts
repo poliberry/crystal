@@ -2,7 +2,7 @@
 
 import { useSocket } from "@/components/providers/socket-provider";
 import { useUser } from "@clerk/nextjs";
-import { Notification } from "@prisma/client";
+import { Notification } from "@/types/conversation";
 import { useEffect, useState } from "react";
 
 type NotificationWithDetails = Notification & {

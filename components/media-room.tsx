@@ -1,5 +1,120 @@
 "use client";
 
+// Vesktop Types
+declare namespace Vesktop {
+  interface AudioNode {
+    "application.name"?: string;
+    "application.process.binary"?: string;
+    "application.process.id"?: string;
+    "node.name"?: string;
+    "media.class"?: string;
+    "media.name"?: string;
+    "device.id"?: string;
+  }
+
+  type SpecialSource = "None" | "Entire System";
+  type AudioSource = SpecialSource | AudioNode;
+  type AudioSources = SpecialSource | AudioNode[];
+
+  interface StreamSettings {
+    audio?: boolean;
+    contentHint?: "motion" | "detail";
+    includeSources?: AudioSources;
+    excludeSources?: AudioSources;
+  }
+
+  interface StreamPick extends StreamSettings {
+    id: string;
+  }
+
+  interface Source {
+    id: string;
+    name: string;
+    url: string;
+  }
+
+  interface IpcCommands {
+    respond(command: { message: string; data: any }): Promise<any>;
+  }
+
+  interface VirtMic {
+    list(): Promise<{ ok: boolean; targets: AudioNode[]; hasPipewirePulse: boolean }>;
+    start(sources: AudioNode[]): Promise<void>;
+    startSystem(excludeSources: AudioNode[]): Promise<void>;
+    stop(): Promise<void>;
+  }
+
+  interface DesktopAPI {
+    getSources(options: { types: string[] }): Promise<Array<{ id: string; name: string; thumbnail: string; }>>;
+  }
+
+  interface ScreenShare {
+    openPickerWindow(skipPicker?: boolean): Promise<{ id: string; contentHint?: string; includeSources?: any; excludeSources?: any; audio?: boolean } | null>;
+  }
+
+  interface VesktopNative {
+    commands: IpcCommands;
+    virtmic: VirtMic;
+    screenShare: ScreenShare;
+  }
+}
+
+// Crystal Electron Native API Types
+declare namespace Crystal {
+  interface ScreenShare {
+    getSources(): Promise<Array<{ id: string; name: string; thumbnail: string }>>;
+    openPicker(skipPicker?: boolean): Promise<{
+      id: string;
+      contentHint?: "motion" | "detail";
+      audio?: boolean;
+      includeSources?: any;
+      excludeSources?: any;
+    } | null>;
+    pick(choice: any): void;
+    cancel(): void;
+  }
+
+  interface Audio {
+    getSources(): Promise<{ ok: boolean; sources?: any[]; error?: string }>;
+    startCapture(options?: { includeSources?: any; excludeSources?: any; sampleRate?: number; includeProcesses?: number[]; excludeProcesses?: number[] }): Promise<{ ok: boolean; error?: string; sampleRate?: number; message?: string }>;
+    stopCapture(): Promise<{ ok: boolean; error?: string }>;
+    onAudioData(callback: (data: { data: number[]; sampleRate: number; channels: number }) => void): () => void;
+    onAudioError(callback: (error: { error: string }) => void): () => void;
+  }
+
+  interface Platform {
+    get(): string;
+    isWindows(): boolean;
+    isLinux(): boolean;
+    isMacOS(): boolean;
+  }
+
+  interface CrystalNative {
+    screenShare: ScreenShare;
+    audio: Audio;
+    platform: Platform;
+  }
+}
+
+declare global {
+  interface Window {
+    VesktopNative?: Vesktop.VesktopNative;
+    CrystalNative?: Crystal.CrystalNative;
+    platform?: string;
+    electron?: {
+      desktopCapturer: {
+        getSources(options: { types: string[]; thumbnailSize?: { width: number; height: number; }; fetchWindowIcons?: boolean }): Promise<Array<{
+          id: string;
+          name: string;
+          thumbnail: any; // Electron.NativeImage
+          display_id: string;
+          appIcon: any | null; // Electron.NativeImage
+        }>>;
+      };
+    };
+  }
+}
+
 import { useUser } from "@clerk/nextjs";
 import {
   ControlBar,
@@ -13,6 +128,7 @@ import {
   useTracks,
   VideoConference,
 } from "@livekit/components-react";
+import { useVirtualAudio } from "@/hooks/use-virtual-audio";
 import {
   Camera,
   CameraOff,
@@ -49,6 +165,34 @@ import {
 import { Badge } from "./ui/badge";
 import { useSocket } from "./providers/socket-provider";
 
+// Vesktop Types
+type SpecialSource = "None" | "Entire System";
+type Node = {
+  "media.class"?: string;
+  "media.name"?: string;
+  "node.name"?: string;
+  "device.id"?: string;
+  "application.name"?: string;
+  "application.process.binary"?: string;
+  "application.process.id"?: string;
+};
+type AudioSource = SpecialSource | Node;
+type AudioSources = SpecialSource | Node[];
+interface StreamSettings {
+  audio: boolean;
+  contentHint?: string;
+  includeSources?: AudioSources;
+  excludeSources?: AudioSources;
+}
+interface StreamPick extends StreamSettings {
+  id: string;
+}
+interface IpcResponse<T = any> {
+  nonce: string;
+  ok: boolean;
+  data: T;
+}
+
 type MediaRoomProps = {
   channel: Channel;
   server: Server | null;
@@ -61,6 +205,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const [activeParticipant, setActiveParticipant] = useState<any>(null);
   const [activeScreenShare, setActiveScreenShare] = useState<any>(null);
   const { localParticipant } = useLocalParticipant();
+  const { isElectron, virtualDevice, createVirtualMic } = useVirtualAudio();
   const remoteParticipants = useRemoteParticipants();
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -97,9 +242,798 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   };
 
   const toggleScreenShare = async () => {
-    localParticipant.setScreenShareEnabled(
-      !localParticipant.isScreenShareEnabled
-    );
+    if (!localParticipant) return;
+
+    // If disabling, just turn off screen share
+    if (localParticipant.isScreenShareEnabled) {
+      try {
+        await localParticipant.setScreenShareEnabled(false);
+        if (window.CrystalNative && window.CrystalNative.platform.isLinux()) {
+          await window.CrystalNative.audio.stopCapture();
+        }
+      } catch (err) {
+        console.error('Failed to disable screen share:', err);
+      }
+      return;
+    }
+
+    // If running in Electron (CrystalNative), use native screen share picker
+    if (typeof window !== 'undefined' && window.CrystalNative) {
+      try {
+        const platform = window.CrystalNative.platform.get();
+        const isWindows = window.CrystalNative.platform.isWindows();
+        const isLinux = window.CrystalNative.platform.isLinux();
+        const isMacOS = window.CrystalNative.platform.isMacOS();
+
+        let choice: any = null;
+        
+        let systemDisplayStream: MediaStream | null = null;
+        
+          // On Windows/Linux, use custom picker
+          choice = await window.CrystalNative.screenShare.openPicker(false);
+          
+          if (!choice) {
+            // User cancelled or picker was aborted
+            return;
+          }
+        
+        console.log('Screen share choice:', choice);
+
+        // Helper function to get video stream from selected source
+        const getVideoStream = async (sourceId: string): Promise<MediaStream> => {
+          return await navigator.mediaDevices.getUserMedia({
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: sourceId
+              }
+            } as any
+          });
+        };
+
+        // Helper function to capture Linux system audio using PipeWire virtual mic
+        const captureLinuxAudio = async (
+          includeSources: any,
+          excludeSources: any,
+          onTrackEnd: () => void
+        ): Promise<MediaStream | null> => {
+          if (!includeSources || includeSources === "None") {
+            return null;
+          }
+
+          if (!window.CrystalNative) {
+            console.error('CrystalNative not available');
+            return null;
+          }
+
+          try {
+            // Start virtual microphone via IPC
+            const result = await window.CrystalNative.audio.startCapture({
+              includeSources,
+              excludeSources
+            });
+
+            if (!result.ok) {
+              console.error('Failed to start audio capture:', result.error);
+              return null;
+            }
+
+            // Wait for virtual mic device to appear (retry up to 10 times)
+            let virtmicDevice = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+              await new Promise(resolve => setTimeout(resolve, 200));
+              
+              // Request permissions to ensure device labels are visible
+              try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+              } catch (e) {
+                // Ignore permission errors
+              }
+
+              const devices = await navigator.mediaDevices.enumerateDevices();
+              virtmicDevice = devices.find(({ label }) => 
+                label === "crystal-screen-share" || label === "vencord-screen-share"
+              );
+              
+              if (virtmicDevice) {
+                console.log('Found virtual mic device:', virtmicDevice.deviceId, virtmicDevice.label);
+                break;
+              }
+            }
+
+            if (!virtmicDevice) {
+              console.error('Virtual microphone "crystal-screen-share" not found');
+              const devices = await navigator.mediaDevices.enumerateDevices();
+              console.log('Available audio devices:', devices
+                .filter(d => d.kind === 'audioinput')
+                .map(d => ({ deviceId: d.deviceId, label: d.label })));
+              return null;
+            }
+
+            // Capture audio from the virtual microphone
+            const audioStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                deviceId: { exact: virtmicDevice.deviceId },
+                autoGainControl: false,
+                echoCancellation: false,
+                noiseSuppression: false,
+                channelCount: 2,
+                sampleRate: 48000,
+                sampleSize: 16
+              }
+            });
+
+            const audioTrack = audioStream.getAudioTracks()[0];
+            if (audioTrack) {
+              audioTrack.addEventListener('ended', onTrackEnd);
+              console.log('Successfully captured audio from virtual mic');
+              return audioStream;
+            }
+
+            return null;
+          } catch (err) {
+            console.error('Failed to capture Linux audio:', err);
+            return null;
+          }
+        };
+
+        // Helper function to capture Windows system audio (native loopback)
+        const captureWindowsAudio = async (
+          sourceId: string,
+          onTrackEnd: () => void
+        ): Promise<MediaStream | null> => {
+          try {
+            // Use getDisplayMedia to trigger Electron's loopback audio handler
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: true
+            } as any);
+
+            // Extract audio tracks before modifying video
+            const audioTracks = displayStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+              console.warn('No audio tracks in Windows display stream');
+              displayStream.getTracks().forEach(t => t.stop());
+              return null;
+            }
+
+            // Stop video track from display stream (we'll use our selected source)
+            const displayVideoTrack = displayStream.getVideoTracks()[0];
+            if (displayVideoTrack) {
+              displayVideoTrack.stop();
+            }
+
+            // Create separate audio stream
+            const audioStream = new MediaStream(audioTracks);
+            audioTracks[0].addEventListener('ended', onTrackEnd);
+            
+            console.log('Captured Windows system audio via loopback');
+            return audioStream;
+          } catch (err) {
+            console.error('Failed to capture Windows system audio:', err);
+            return null;
+          }
+        };
+
+        // Helper function to capture macOS system audio using native loopback
+        const captureMacOSAudio = async (
+          sourceId: string,
+          onTrackEnd: () => void
+        ): Promise<MediaStream | null> => {
+          try {
+            // Use getDisplayMedia to trigger Electron's loopback audio handler
+            const displayStream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: true
+            } as any);
+
+            // Extract audio tracks before modifying video
+            const audioTracks = displayStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+              console.warn('No audio tracks in macOS display stream');
+              displayStream.getTracks().forEach(t => t.stop());
+              return null;
+            }
+
+            // Stop video track from display stream (we'll use our selected source)
+            const displayVideoTrack = displayStream.getVideoTracks()[0];
+            if (displayVideoTrack) {
+              displayVideoTrack.stop();
+            }
+
+            // Create separate audio stream
+            const audioStream = new MediaStream(audioTracks);
+            audioTracks[0].addEventListener('ended', onTrackEnd);
+            
+            console.log('Captured macOS system audio via Electron loopback');
+            return audioStream;
+          } catch (err) {
+            console.error('Failed to capture macOS system audio:', err);
+            return null;
+          }
+        };
+
+        // Legacy AudioTee function (kept for reference, not used)
+        const captureMacOSAudioTee = async (
+          onTrackEnd: () => void
+        ): Promise<MediaStream | null> => {
+          if (!window.CrystalNative) {
+            console.error('CrystalNative not available');
+            return null;
+          }
+
+          try {
+            // Start AudioTee capture
+            console.log('Starting AudioTee capture...');
+            const result = await window.CrystalNative.audio.startCapture({
+              sampleRate: 48000
+            });
+
+            console.log('AudioTee startCapture result:', result);
+
+            if (!result.ok) {
+              console.error('Failed to start AudioTee:', result.error, result.message);
+              return null;
+            }
+            
+            console.log('AudioTee started successfully, setting up audio listeners...');
+
+            const sampleRate = result.sampleRate || 48000;
+            const channels = 2; // Stereo
+
+            // Create Web Audio API context to convert PCM to MediaStream
+            const audioContext = new AudioContext({ sampleRate });
+            const destination = audioContext.createMediaStreamDestination();
+
+            // Create a silent oscillator to trigger ScriptProcessorNode
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0; // Silent
+            oscillator.connect(gainNode);
+            
+            // Use ScriptProcessorNode for continuous audio processing
+            // Need input channels for it to trigger!
+            const bufferSize = 4096;
+            const processor = audioContext.createScriptProcessor(bufferSize, channels, channels);
+            
+            // Circular buffer to hold audio data (separate buffers per channel)
+            const bufferLength = sampleRate * 2; // 2 seconds of audio
+            const audioBuffers: Float32Array[] = [];
+            for (let i = 0; i < channels; i++) {
+              audioBuffers.push(new Float32Array(bufferLength));
+            }
+            let writePosition = 0;
+            let availableSamples = 0;
+
+            // Connect: oscillator -> gain -> processor -> destination
+            gainNode.connect(processor);
+            processor.connect(destination);
+            
+            // Start the oscillator to trigger processing
+            oscillator.start();
+            
+            console.log('Audio processing setup complete', {
+              sampleRate,
+              channels,
+              bufferSize,
+              bufferLength
+            });
+            
+            // Track processing stats
+            let processCount = 0;
+            let lastAvailableSamples = 0;
+            
+            // Track audio levels for debugging
+            let maxLevel = 0;
+            let samplesWithAudio = 0;
+            
+            // Process audio in the ScriptProcessorNode
+            processor.onaudioprocess = (e) => {
+              processCount++;
+              const outputBuffer = e.outputBuffer;
+              const frameCount = outputBuffer.length;
+              
+              // Log every 100th process call to avoid spam
+              if (processCount % 100 === 0) {
+                console.log('ScriptProcessorNode processing', {
+                  processCount,
+                  availableSamples,
+                  frameCount,
+                  bufferLength,
+                  maxLevel: maxLevel.toFixed(4),
+                  samplesWithAudio
+                });
+                maxLevel = 0;
+                samplesWithAudio = 0;
+              }
+              
+              // Copy data from our circular buffer to the output
+              for (let channel = 0; channel < channels; channel++) {
+                const outputData = outputBuffer.getChannelData(channel);
+                const channelBuffer = audioBuffers[channel];
+                
+                // Debug: check buffer contents periodically
+                if (processCount % 100 === 0 && availableSamples > 0) {
+                  const sampleAtWritePos = channelBuffer[writePosition];
+                  const sampleAtReadPos = channelBuffer[(writePosition - availableSamples + bufferLength) % bufferLength];
+                  console.log(`Channel ${channel} buffer check`, {
+                    writePosition,
+                    availableSamples,
+                    sampleAtWritePos,
+                    sampleAtReadPos,
+                    bufferMin: Math.min(...Array.from(channelBuffer.slice(0, 1000))),
+                    bufferMax: Math.max(...Array.from(channelBuffer.slice(0, 1000)))
+                  });
+                }
+                
+                for (let i = 0; i < frameCount; i++) {
+                  if (availableSamples > 0) {
+                    // Calculate read position: read from oldest available sample
+                    const readPos = (writePosition - availableSamples + i + bufferLength) % bufferLength;
+                    const sample = channelBuffer[readPos];
+                    outputData[i] = sample;
+                    
+                    // Track audio levels
+                    const absSample = Math.abs(sample);
+                    if (absSample > maxLevel) {
+                      maxLevel = absSample;
+                    }
+                    if (absSample > 0.001) {
+                      samplesWithAudio++;
+                    }
+                  } else {
+                    // No data available, output silence
+                    outputData[i] = 0;
+                  }
+                }
+              }
+              
+              // Update available samples
+              const previousAvailable = availableSamples;
+              availableSamples = Math.max(0, availableSamples - frameCount);
+              
+              // Log if we're running out of data
+              if (previousAvailable > 0 && availableSamples === 0 && processCount % 50 === 0) {
+                console.warn('Audio buffer underrun - no data available');
+              }
+            };
+
+            // Track received chunks
+            let chunkCount = 0;
+            let totalSamplesReceived = 0;
+            
+            // Listen for audio data from AudioTee
+            console.log('Setting up audio data listener...');
+            const removeAudioDataListener = window.CrystalNative.audio.onAudioData((chunk) => {
+              chunkCount++;
+              totalSamplesReceived += chunk.data.length;
+              
+              // Log first few chunks to verify data is coming
+              if (chunkCount <= 5) {
+                const firstSamples = Array.from(chunk.data.slice(0, 20));
+                const maxSample = Math.max(...chunk.data.map(Math.abs));
+                const nonZeroSamples = chunk.data.filter(s => Math.abs(s) > 100).length;
+                
+                console.log('Received AudioTee chunk #' + chunkCount, {
+                  dataLength: chunk.data.length,
+                  sampleRate: chunk.sampleRate,
+                  channels: chunk.channels,
+                  firstFewSamples: firstSamples,
+                  maxSample,
+                  nonZeroSamples,
+                  hasAudio: maxSample > 100
+                });
+              }
+              
+              // Log every 50th chunk to avoid spam
+              if (chunkCount % 50 === 0) {
+                console.log('Received AudioTee chunk', {
+                  chunkCount,
+                  dataLength: chunk.data.length,
+                  sampleRate: chunk.sampleRate,
+                  channels: chunk.channels,
+                  totalSamplesReceived,
+                  availableSamples
+                });
+              }
+              
+              // Convert PCM data (Int16 array) to Float32 for Web Audio API
+              const float32Data = new Float32Array(chunk.data.length);
+              for (let i = 0; i < chunk.data.length; i++) {
+                // Convert Int16 (-32768 to 32767) to Float32 (-1.0 to 1.0)
+                float32Data[i] = chunk.data[i] / 32768.0;
+              }
+
+              // AudioTee provides interleaved stereo PCM: [L, R, L, R, ...]
+              // Write to circular buffer (de-interleave into separate channel buffers)
+              const samples = float32Data.length / channels;
+              
+              // Debug: check first chunk's data
+              if (chunkCount === 1) {
+                console.log('Writing first chunk to buffer', {
+                  samples,
+                  float32DataLength: float32Data.length,
+                  firstFewFloat32: Array.from(float32Data.slice(0, 10)),
+                  maxFloat32: Math.max(...Array.from(float32Data.map(Math.abs)))
+                });
+              }
+              
+              for (let i = 0; i < samples; i++) {
+                for (let channel = 0; channel < channels; channel++) {
+                  const sampleIndex = i * channels + channel;
+                  const channelBuffer = audioBuffers[channel];
+                  const sampleValue = float32Data[sampleIndex];
+                  channelBuffer[writePosition] = sampleValue;
+                  
+                  // Debug first write
+                  if (chunkCount === 1 && i === 0 && channel === 0) {
+                    console.log('First sample written', {
+                      sampleIndex,
+                      sampleValue,
+                      writePosition,
+                      channelBufferLength: channelBuffer.length
+                    });
+                  }
+                }
+                
+                writePosition = (writePosition + 1) % bufferLength;
+                availableSamples = Math.min(bufferLength, availableSamples + 1);
+              }
+              
+              // Log buffer status periodically
+              if (chunkCount % 50 === 0) {
+                // Check actual buffer values
+                const firstChannelBuffer = audioBuffers[0];
+                const bufferSample = firstChannelBuffer[writePosition];
+                const bufferMin = Math.min(...Array.from(firstChannelBuffer.slice(Math.max(0, writePosition - 100), writePosition + 100)));
+                const bufferMax = Math.max(...Array.from(firstChannelBuffer.slice(Math.max(0, writePosition - 100), writePosition + 100)));
+                
+                console.log('Audio buffer status', {
+                  availableSamples,
+                  bufferLength,
+                  writePosition,
+                  utilization: (availableSamples / bufferLength * 100).toFixed(1) + '%',
+                  bufferSampleAtWritePos: bufferSample,
+                  bufferMin,
+                  bufferMax
+                });
+              }
+            });
+
+            // Listen for errors
+            console.log('Setting up audio error listener...');
+            const removeErrorListener = window.CrystalNative.audio.onAudioError((error) => {
+              console.error('AudioTee error received:', error.error);
+            });
+            
+            // Set a timeout to check if we're receiving data
+            setTimeout(() => {
+              if (chunkCount === 0) {
+                console.error('No audio chunks received after 2 seconds! AudioTee may not be sending data.');
+              } else {
+                console.log('Audio chunks are being received:', chunkCount);
+              }
+            }, 2000);
+
+            // Cleanup on track end
+            const originalOnTrackEnd = onTrackEnd;
+            onTrackEnd = async () => {
+              removeAudioDataListener();
+              removeErrorListener();
+              oscillator.stop();
+              processor.disconnect();
+              gainNode.disconnect();
+              await window.CrystalNative!.audio.stopCapture();
+              audioContext.close();
+              originalOnTrackEnd();
+            };
+
+            // Get the MediaStream from destination
+            const audioStream = destination.stream;
+            const audioTrack = audioStream.getAudioTracks()[0];
+            
+            if (audioTrack) {
+              // Ensure track is enabled and ready
+              audioTrack.enabled = true;
+              audioTrack.addEventListener('ended', onTrackEnd);
+              
+              // Create a test audio element to verify audio is working
+              const testAudio = document.createElement('audio');
+              testAudio.srcObject = audioStream;
+              testAudio.autoplay = true;
+              testAudio.volume = 1.0; // Full volume for testing
+              testAudio.muted = false;
+              
+              // Try to play immediately
+              testAudio.play().then(() => {
+                console.log('Test audio element started playing');
+              }).catch(err => {
+                console.error('Failed to play test audio:', err);
+              });
+              
+              document.body.appendChild(testAudio);
+              
+              // Monitor audio element state
+              testAudio.addEventListener('play', () => {
+                console.log('Test audio element is playing');
+              });
+              
+              testAudio.addEventListener('pause', () => {
+                console.log('Test audio element paused');
+              });
+              
+              testAudio.addEventListener('error', (e) => {
+                console.error('Test audio element error:', e);
+              });
+              
+              // Log test audio element
+              console.log('Created test audio element to verify audio stream', {
+                audioElement: testAudio,
+                paused: testAudio.paused,
+                muted: testAudio.muted,
+                volume: testAudio.volume,
+                readyState: testAudio.readyState,
+                srcObject: testAudio.srcObject
+              });
+              
+              // Monitor track state
+              const trackStateMonitor = setInterval(() => {
+                if (audioTrack.readyState === 'ended') {
+                  clearInterval(trackStateMonitor);
+                  return;
+                }
+                
+                // Get track settings to verify it's producing audio
+                const settings = audioTrack.getSettings();
+                const constraints = audioTrack.getConstraints();
+                const capabilities = audioTrack.getCapabilities();
+                
+                console.log('Audio track state check', {
+                  readyState: audioTrack.readyState,
+                  enabled: audioTrack.enabled,
+                  muted: audioTrack.muted,
+                  settings,
+                  constraints,
+                  capabilities
+                });
+              }, 5000); // Check every 5 seconds
+              
+              // Clean up monitor on track end
+              audioTrack.addEventListener('ended', () => {
+                clearInterval(trackStateMonitor);
+                if (testAudio.parentNode) {
+                  testAudio.parentNode.removeChild(testAudio);
+                }
+              });
+              
+              console.log('Captured macOS system audio via AudioTee', {
+                id: audioTrack.id,
+                label: audioTrack.label,
+                enabled: audioTrack.enabled,
+                muted: audioTrack.muted,
+                readyState: audioTrack.readyState,
+                kind: audioTrack.kind,
+                testAudioElement: testAudio
+              });
+              
+              // Add a way to test audio - expose it globally for debugging
+              (window as any).testMacOSAudio = {
+                audioStream,
+                audioTrack,
+                audioContext,
+                testAudio,
+                stop: () => {
+                  clearInterval(trackStateMonitor);
+                  testAudio.pause();
+                  if (testAudio.parentNode) {
+                    testAudio.parentNode.removeChild(testAudio);
+                  }
+                },
+                play: () => {
+                  testAudio.play().catch(console.error);
+                },
+                pause: () => {
+                  testAudio.pause();
+                }
+              };
+              
+              console.log('Test audio controls available at window.testMacOSAudio');
+              
+              return audioStream;
+            }
+
+            console.error('No audio track in MediaStream from destination');
+            return null;
+          } catch (err) {
+            console.error('Failed to capture macOS system audio via AudioTee:', err);
+            // Try fallback to getUserMedia
+            try {
+              const audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                  mandatory: {
+                    chromeMediaSource: 'desktop'
+                  }
+                } as any
+              });
+              const audioTrack = audioStream.getAudioTracks()[0];
+              if (audioTrack) {
+                audioTrack.addEventListener('ended', onTrackEnd);
+                return audioStream;
+              }
+            } catch (fallbackErr) {
+              console.warn('Fallback audio capture also failed:', fallbackErr);
+            }
+            return null;
+          }
+        };
+
+        // On macOS, use tracks directly from system picker
+        // On Windows/Linux, get video stream from selected source
+        let videoTrack: MediaStreamTrack;
+        let videoStream: MediaStream;
+        
+        if (isMacOS && systemDisplayStream) {
+          // Use the video track from system picker
+          videoStream = systemDisplayStream;
+          videoTrack = systemDisplayStream.getVideoTracks()[0];
+          
+          if (!videoTrack) {
+            throw new Error('No video track available from system picker');
+          }
+        } else {
+          // Get video stream from selected source (Windows/Linux)
+          videoStream = await getVideoStream(choice.id);
+          videoTrack = videoStream.getVideoTracks()[0];
+          
+          if (!videoTrack) {
+            throw new Error('No video track available');
+          }
+        }
+
+        // Apply content hint
+        if (choice.contentHint) {
+          videoTrack.contentHint = choice.contentHint;
+        }
+
+        // Setup cleanup handler
+        const audioStreams: MediaStream[] = [];
+        const handleTrackEnd = async () => {
+          await localParticipant.setScreenShareEnabled(false);
+          
+          // Stop virtual mic on Linux
+          if (isLinux && window.CrystalNative) {
+            try {
+              await window.CrystalNative.audio.stopCapture();
+            } catch (err) {
+              console.warn('Failed to stop audio capture:', err);
+            }
+          }
+
+          // Stop all tracks
+          videoStream.getTracks().forEach(track => track.stop());
+          audioStreams.forEach(stream => {
+            stream.getTracks().forEach(track => track.stop());
+          });
+        };
+
+        videoTrack.addEventListener('ended', handleTrackEnd);
+
+        // Publish video track
+        await localParticipant.publishTrack(videoTrack, {
+          source: Track.Source.ScreenShare,
+          simulcast: true
+        });
+
+        // Capture and publish audio based on platform
+        if (isLinux && choice.includeSources && choice.includeSources !== "None") {
+          // Linux: Use venmic for system audio
+          const audioStream = await captureLinuxAudio(
+            choice.includeSources,
+            choice.excludeSources,
+            handleTrackEnd
+          );
+
+          if (audioStream) {
+            audioStreams.push(audioStream);
+            const audioTrack = audioStream.getAudioTracks()[0];
+            if (audioTrack) {
+              await localParticipant.publishTrack(audioTrack, {
+                source: Track.Source.ScreenShareAudio
+              });
+              console.log('Published Linux system audio via venmic');
+            }
+          }
+        } else if (choice.audio && isWindows) {
+          // Windows: Use native loopback audio
+          const audioStream = await captureWindowsAudio(choice.id, handleTrackEnd);
+
+          if (audioStream) {
+            audioStreams.push(audioStream);
+            const audioTrack = audioStream.getAudioTracks()[0];
+            if (audioTrack) {
+              await localParticipant.publishTrack(audioTrack, {
+                source: Track.Source.ScreenShareAudio
+              });
+              console.log('Published Windows system audio via loopback');
+            }
+          }
+        } else if (choice.audio && isMacOS) {
+          // macOS: Use audio tracks directly from system picker
+          if (systemDisplayStream) {
+            const audioTracks = systemDisplayStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+              // Create separate audio stream from system picker tracks
+              const audioStream = new MediaStream(audioTracks);
+              audioTracks[0].addEventListener('ended', handleTrackEnd);
+              audioStreams.push(audioStream);
+              
+              const audioTrack = audioStream.getAudioTracks()[0];
+              if (audioTrack) {
+                await localParticipant.publishTrack(audioTrack, {
+                  source: Track.Source.ScreenShareAudio
+                });
+                console.log('Published macOS system audio from system picker');
+              }
+            } else {
+              // Fallback to native loopback if no audio in system picker
+              const audioStream = await captureMacOSAudio(choice.id, handleTrackEnd);
+              if (audioStream) {
+                audioStreams.push(audioStream);
+                const audioTrack = audioStream.getAudioTracks()[0];
+                if (audioTrack) {
+                  await localParticipant.publishTrack(audioTrack, {
+                    source: Track.Source.ScreenShareAudio
+                  });
+                  console.log('Published macOS system audio via Electron loopback');
+                }
+              }
+            }
+          } else {
+            // Fallback to native loopback if system picker wasn't used
+            const audioStream = await captureMacOSAudio(choice.id, handleTrackEnd);
+            if (audioStream) {
+              audioStreams.push(audioStream);
+              const audioTrack = audioStream.getAudioTracks()[0];
+              if (audioTrack) {
+                await localParticipant.publishTrack(audioTrack, {
+                  source: Track.Source.ScreenShareAudio
+                });
+                console.log('Published macOS system audio via Electron loopback');
+              }
+            }
+          }
+        }
+      } catch (err) {
+        if (err === 'Aborted') {
+          console.log('User cancelled screen share');
+          return;
+        }
+
+        // If Electron picker fails, fall back to browser getDisplayMedia
+        console.warn('Crystal Electron screen share picker failed, falling back to browser getDisplayMedia:', err);
+        await localParticipant.setScreenShareEnabled(true);
+      }
+    } else if (typeof window !== 'undefined' && window.VesktopNative) {
+      // Fallback to Vesktop if available
+      try {
+        const choice = await window.VesktopNative.screenShare.openPickerWindow(false);
+        if (!choice) return;
+        
+        // Use existing Vesktop implementation as fallback
+        // (Keep existing Vesktop code here as fallback)
+        await localParticipant.setScreenShareEnabled(true, {
+          audio: true
+        });
+      } catch (err) {
+        console.warn('Vesktop fallback also failed:', err);
+        await localParticipant.setScreenShareEnabled(true);
+      }
+    } else {
+      // Not in Electron - use browser's getDisplayMedia
+      await localParticipant.setScreenShareEnabled(true, {
+        audio: true
+      });
+    }
   };
 
   const disconnectCall = async () => {
@@ -118,6 +1052,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     Track.Source.Camera,
     Track.Source.Microphone,
     Track.Source.ScreenShare,
+    Track.Source.ScreenShareAudio,
   ]);
 
   // Filter for screen shares only
@@ -165,6 +1100,24 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         }}
                       >
                         <VideoRenderer trackRef={activeScreenShare} />
+                        {/* Add audio renderer for screen share audio */}
+                        {allTracks
+                          .filter(track => 
+                            track.publication.source === Track.Source.ScreenShareAudio &&
+                            track.participant.identity === activeScreenShare.participant.identity
+                          )
+                          .map(track => (
+                            <audio
+                              key={track.publication.trackSid}
+                              autoPlay
+                              playsInline
+                              ref={el => {
+                                if (el && track.publication.track?.kind === "audio") {
+                                  track.publication.track.attach(el);
+                                }
+                              }}
+                            />
+                          ))}
                         <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 bg-black bg-opacity-50 text-white px-2 sm:px-3 py-1 sm:py-2 rounded">
                           <div className="flex items-center gap-1 sm:gap-2">
                             <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -759,3 +1712,4 @@ function safeParseMetadata(raw?: string): { avatar?: string } | null {
     return null;
   }
 }
+

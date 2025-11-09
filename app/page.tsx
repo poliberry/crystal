@@ -12,7 +12,7 @@ const HomePage = () => {
     if (!isLoaded) return; // Wait for Clerk to load
 
     if (!isSignedIn) {
-      router.push("/sign-in");
+      router.replace("/sign-in");
       return;
     }
 

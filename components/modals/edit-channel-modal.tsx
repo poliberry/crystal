@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChannelType } from "@prisma/client";
+import { ChannelType } from "@/types/conversation";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";

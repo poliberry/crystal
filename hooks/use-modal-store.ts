@@ -1,4 +1,4 @@
-import type { Channel, ChannelType, Server } from "@prisma/client";
+import type { Channel, ChannelType, Server } from "@/types/conversation";
 import { create } from "zustand";
 
 export type ModalType =

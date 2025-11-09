@@ -1,5 +1,6 @@
 "use client";
 
+import { ConversationType } from "@/types/conversation";
 import {
   DndContext,
   closestCenter,
@@ -15,7 +16,6 @@ import {
 import { ConversationChannel } from "./server-channel";
 import { ServerSection } from "./server-section";
 import { useRouter } from "next/navigation";
-import { ConversationType } from "@prisma/client";
 
 type ServerChannelListProps = {
   conversations: any[];

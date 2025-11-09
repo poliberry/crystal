@@ -5,9 +5,9 @@ import {
   type Channel,
   MemberRole,
   type Server,
-  Conversation,
+  type Conversation,
   ConversationType,
-} from "@prisma/client";
+} from "@/types/conversation";
 import { Edit, Hash, Lock, Mic, Trash, Video, GripVertical, Users, Phone, PhoneCall, Ellipsis } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";

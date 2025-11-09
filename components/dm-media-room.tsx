@@ -106,9 +106,87 @@ export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
   };
 
   const toggleScreenShare = async () => {
-    localParticipant.setScreenShareEnabled(
-      !localParticipant.isScreenShareEnabled
-    );
+    // If disabling, just turn off screen share
+    if (localParticipant.isScreenShareEnabled) {
+      await localParticipant.setScreenShareEnabled(false);
+      return;
+    }
+
+    // If running in the Electron wrapper, use desktop picker + system audio
+    if (typeof window !== 'undefined' && (window as any).desktopAPI) {
+      try {
+        // For macOS, check screen recording permission
+        if (process.platform === 'darwin') {
+          const checkPermission = await (window as any).desktopAPI.checkScreenRecordingPermission();
+          if (!checkPermission.granted) {
+            const requestPermission = await (window as any).desktopAPI.requestScreenRecordingPermission();
+            if (!requestPermission.granted) {
+              window.alert('Screen recording permission is required to share your screen. Please enable it in System Preferences > Security & Privacy > Screen Recording.');
+              return;
+            }
+          }
+        }
+
+        // Get screen/window sources
+        const sources = await (window as any).desktopAPI.getSources({ types: ['screen', 'window'] });
+        if (!sources || sources.length === 0) {
+          throw new Error('No screen sources available');
+        }
+
+        let videoTrack: MediaStreamTrack | undefined;
+        
+        // Create video track from selected source
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sources[0].id // In production, show UI for source selection
+            }
+          } as any
+        });
+        
+        videoTrack = stream.getVideoTracks()[0];
+
+        // Publish the screen video track
+        if (videoTrack) {
+          await localParticipant.publishTrack(videoTrack, {
+            source: Track.Source.ScreenShare
+          });
+        }
+
+        // Try to capture system audio
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              mandatory: {
+                chromeMediaSource: 'desktop'
+              }
+            } as any
+          });
+
+          const audioTrack = audioStream.getAudioTracks()[0];
+          if (audioTrack) {
+            await localParticipant.publishTrack(audioTrack, {
+              source: Track.Source.ScreenShareAudio
+            });
+          }
+        } catch (err) {
+          console.warn('Could not capture system audio:', err);
+          // On macOS, show dialog about setting up audio loopback
+          if (process.platform === 'darwin') {
+            window.alert('To share system audio, you need to install and configure an audio loopback device like BlackHole.');
+          }
+        }
+      } catch (err) {
+        // If desktop picker fails, fall back to browser getDisplayMedia
+        console.warn('Desktop picker failed, falling back to browser getDisplayMedia', err);
+        await localParticipant.setScreenShareEnabled(true);
+      }
+    } else {
+      // Not in Electron - use browser's getDisplayMedia
+      await localParticipant.setScreenShareEnabled(true);
+    }
   };
 
   const disconnectCall = async () => {
