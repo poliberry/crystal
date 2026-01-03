@@ -279,22 +279,70 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
           });
         };
 
-        // Helper function to capture Linux system audio using PipeWire virtual mic
+        // Helper function to capture Linux system audio
+        // First tries native PipeWire via getDisplayMedia, then falls back to virtual mic
         const captureLinuxAudio = async (
           includeSources: any,
           excludeSources: any,
+          sourceId: string,
           onTrackEnd: () => void
         ): Promise<MediaStream | null> => {
-          if (!includeSources || includeSources === "None") {
-            return null;
-          }
-
           if (!window.CrystalNative) {
             console.error('CrystalNative not available');
             return null;
           }
 
+          // First, try native PipeWire capture via getDisplayMedia with audio
+          // This works when Electron's setDisplayMediaRequestHandler is configured
+          // and xdg-desktop-portal supports audio capture
           try {
+            console.log('Attempting native PipeWire audio capture via getDisplayMedia...');
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                mandatory: {
+                  chromeMediaSource: 'desktop',
+                  chromeMediaSourceId: sourceId
+                }
+              } as any,
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                sampleRate: 48000,
+                channelCount: 2
+              } as any
+            });
+
+            const audioTracks = displayStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+              // Stop the video track (we already have it from the selected source)
+              const videoTrack = displayStream.getVideoTracks()[0];
+              if (videoTrack) {
+                videoTrack.stop();
+              }
+
+              // Create separate audio stream
+              const audioStream = new MediaStream(audioTracks);
+              audioTracks[0].addEventListener('ended', onTrackEnd);
+              
+              console.log('Successfully captured Linux audio via native PipeWire');
+              return audioStream;
+            } else {
+              // No audio tracks, stop the video track and fall through to virtual mic
+              displayStream.getTracks().forEach(t => t.stop());
+              console.log('No audio tracks in native PipeWire stream, falling back to virtual mic');
+            }
+          } catch (nativeErr) {
+            console.log('Native PipeWire audio capture failed, falling back to virtual mic:', nativeErr);
+          }
+
+          // Fallback to virtual microphone approach
+          if (!includeSources || includeSources === "None") {
+            return null;
+          }
+
+          try {
+            console.log('Using virtual microphone for Linux audio capture...');
             // Start virtual microphone via IPC
             const result = await window.CrystalNative.audio.startCapture({
               includeSources,
@@ -360,7 +408,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
 
             return null;
           } catch (err) {
-            console.error('Failed to capture Linux audio:', err);
+            console.error('Failed to capture Linux audio via virtual mic:', err);
             return null;
           }
         };
@@ -913,11 +961,12 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         });
 
         // Capture and publish audio based on platform
-        if (isLinux && choice.includeSources && choice.includeSources !== "None") {
-          // Linux: Use venmic for system audio
+        if (isLinux && (choice.audio || (choice.includeSources && choice.includeSources !== "None"))) {
+          // Linux: Try native PipeWire first, then fall back to venmic
           const audioStream = await captureLinuxAudio(
             choice.includeSources,
             choice.excludeSources,
+            choice.id,
             handleTrackEnd
           );
 
@@ -928,7 +977,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
               await localParticipant.publishTrack(audioTrack, {
                 source: Track.Source.ScreenShareAudio
               });
-              console.log('Published Linux system audio via venmic');
+              console.log('Published Linux system audio');
             }
           }
         } else if (choice.audio && isWindows) {
