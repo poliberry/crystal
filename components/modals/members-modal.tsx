@@ -1,7 +1,7 @@
 "use client";
 
-import { MemberRole } from "@prisma/client";
-import axios from "axios";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
   Check,
   Gavel,
@@ -14,15 +14,14 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import qs from "query-string";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,17 +37,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserAvatar } from "@/components/user-avatar";
 import { useModal } from "@/hooks/use-modal-store";
 import { ServerWithMembersWithProfiles } from "@/types";
+import { useAuthStore } from "@/lib/auth-store";
 
-const roleIconMap = {
+const roleIconMap: Record<string, JSX.Element | null> = {
   GUEST: null,
   MODERATOR: <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />,
   ADMIN: <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
 };
 
 export const MembersModal = () => {
-  const { isOpen, onOpen, onClose, type, data } = useModal();
+  const { isOpen, onClose, type, data } = useModal();
   const [loadingId, setLoadingId] = useState("");
   const router = useRouter();
+  const { user } = useAuthStore();
+  const removeMember = useMutation(api.members.remove);
+  const updateMemberRole = useMutation(api.members.updateRole);
 
   const isModalOpen = isOpen && type === "members";
 
@@ -58,17 +61,14 @@ export const MembersModal = () => {
     try {
       setLoadingId(memberId);
 
-      const url = qs.stringifyUrl({
-        url: `/api/members/${memberId}`,
-        query: {
-          serverId: server?.id,
-        },
+      await removeMember({
+        memberId: memberId as any,
+        serverId: server?._id as any,
+        userId: user?.userId,
       });
 
-      const response = await axios.delete(url);
-
+      // Convex queries auto-refresh, no need to fetch
       router.refresh();
-      onOpen("members", { server: response.data });
     } catch (error: unknown) {
       console.error(error);
     } finally {
@@ -76,21 +76,19 @@ export const MembersModal = () => {
     }
   };
 
-  const onRoleChange = async (memberId: string, role: MemberRole) => {
+  const onRoleChange = async (memberId: string, role: "ADMIN" | "MODERATOR" | "GUEST") => {
     try {
       setLoadingId(memberId);
 
-      const url = qs.stringifyUrl({
-        url: `/api/members/${memberId}`,
-        query: {
-          serverId: server?.id,
-        },
+      await updateMemberRole({
+        memberId: memberId as any,
+        serverId: server?._id as any,
+        role,
+        userId: user?.userId,
       });
 
-      const response = await axios.patch(url, { role });
-
+      // Convex queries auto-refresh, no need to fetch
       router.refresh();
-      onOpen("members", { server: response.data });
     } catch (error: unknown) {
       console.error(error);
     } finally {
@@ -99,21 +97,21 @@ export const MembersModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={onClose}>
-      <DialogContent className="overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={onClose} direction="bottom">
+      <DrawerContent className="max-h-[90vh]">
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Manage Members
-          </DialogTitle>
+          </DrawerTitle>
 
-          <DialogDescription className="text-center text-zinc-500">
+          <DrawerDescription className="text-center text-zinc-500">
             {server?.members?.length} Members
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         <ScrollArea className="mt-8 max-h-[420px] pr-6">
           {server?.members?.map((member) => (
-            <div key={member.id} className="flex items-center gap-x-2 mb-6">
+            <div key={member._id} className="flex items-center gap-x-2 mb-6">
               <UserAvatar
                 alt={member.profile.name}
                 src={member.profile.imageUrl}
@@ -128,7 +126,7 @@ export const MembersModal = () => {
               </div>
 
               {server.profileId !== member.profileId &&
-                loadingId !== member.id && (
+                loadingId !== member._id && (
                   <div className="ml-auto">
                     <DropdownMenu>
                       <DropdownMenuTrigger>
@@ -145,7 +143,7 @@ export const MembersModal = () => {
                           <DropdownMenuPortal>
                             <DropdownMenuSubContent>
                               <DropdownMenuItem
-                                onClick={() => onRoleChange(member.id, "GUEST")}
+                                onClick={() => onRoleChange(member._id, "GUEST")}
                               >
                                 <Shield className="h-4 w-4 mr-2" />
                                 Guest
@@ -156,7 +154,7 @@ export const MembersModal = () => {
 
                               <DropdownMenuItem
                                 onClick={() =>
-                                  onRoleChange(member.id, "MODERATOR")
+                                  onRoleChange(member._id, "MODERATOR")
                                 }
                               >
                                 <ShieldCheck className="h-4 w-4 mr-2" />
@@ -170,7 +168,7 @@ export const MembersModal = () => {
                         </DropdownMenuSub>
 
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onKick(member.id)}>
+                        <DropdownMenuItem onClick={() => onKick(member._id)}>
                           <Gavel className="h-4 w-4 mr-2" />
                           Kick
                         </DropdownMenuItem>
@@ -179,13 +177,13 @@ export const MembersModal = () => {
                   </div>
                 )}
 
-              {loadingId === member.id && (
+              {loadingId === member._id && (
                 <Loader2 className="animate-spin text-zinc-500 ml-auto w-4 h-4" />
               )}
             </div>
           ))}
         </ScrollArea>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 };

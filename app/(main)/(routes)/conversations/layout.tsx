@@ -1,34 +1,45 @@
-import { currentUser, redirectToSignIn } from "@clerk/nextjs";
-import { redirect } from "next/navigation";
-import type { PropsWithChildren } from "react";
+"use client";
 
-import { ServerSidebar } from "@/components/server/server-sidebar";
-import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
-import { MemberSidebar } from "@/components/server/member-sidebar";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { useRouter } from "next/navigation";
 import React from "react";
 import { ConversationSidebar } from "@/components/conversation/conversation-sidebar";
 
-const ConversationsLayout = async ({ children }: { children: React.ReactNode }) => {
-  const profile = await currentProfile();
-  const user = await currentUser();
+const ConversationsLayout = ({ children }: { children: React.ReactNode }) => {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+  const updateProfile = useMutation(api.profiles.update);
 
-  if (!profile) return redirectToSignIn();
-
-  await db.profile.update({
-    where: {
-      userId: profile.userId,
-    },
-    data: {
-      name: `${user?.username}`,
-      imageUrl: `${user?.imageUrl}`,
-      email: `${user?.emailAddresses[0].emailAddress}`
+  // Update profile when it loads (if needed)
+  React.useEffect(() => {
+    if (profile && profile.name === "Unnamed") {
+      // Profile might need updating, but we don't have user data here
+      // This will be handled by the auth provider
     }
-  })
+  }, [profile]);
+
+  if (profile === undefined) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    router.push("/sign-in");
+    return null;
+  }
 
   return (
-    <div className="h-full flex flex-row overflow-hidden pointer-events-auto">
-      <aside className="md:flex h-full w-96 flex-col inset-y-0 z-[10]">
+    <div className="h-full flex flex-row overflow-hidden pointer-events-auto bg-sidebar">
+      <aside className="md:flex h-full w-96 flex-col inset-y-0 z-[10] px-2 pb-2">
         <ConversationSidebar />
       </aside>
       <main className="h-full w-full z-[20]">{children}</main>

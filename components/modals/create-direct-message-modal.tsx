@@ -1,17 +1,18 @@
 "use client";
 
-import axios from "axios";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,52 +20,44 @@ import { useModal } from "@/hooks/use-modal-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, MessageCircle } from "lucide-react";
-import { db } from "@/lib/db";
 import { useEffect } from "react";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const CreateDirectMessageModal = () => {
   const { isOpen, onClose, type, data } = useModal();
   const router = useRouter();
+  const { user } = useAuthStore();
+  const createDirectConversation = useMutation(api.conversations.createDirect);
 
   const isModalOpen = isOpen && type === "createDirectMessage";
   const { currentMember, currentProfile } = data;
 
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [availableMembers, setAvailableMembers] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (isModalOpen && currentMember) {
-      // Fetch available members (from same servers)
-      fetchAvailableMembers();
-    }
-  }, [isModalOpen, currentMember]);
-
-  const fetchAvailableMembers = async () => {
-    try {
-      const response = await axios.get(`/api/members/available/${currentMember.id}`);
-      setAvailableMembers(response.data);
-    } catch (error) {
-      console.error("Error fetching members:", error);
-    }
-  };
-
-  const filteredMembers = availableMembers.filter((member) =>
-    member.profile.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.profile.globalName?.toLowerCase().includes(searchTerm.toLowerCase())
+  const availableFriends = useQuery(
+    api.friends.getFriends,
+    user?.userId ? { userId: user.userId } : "skip"
   );
 
-  const handleCreateDM = async (targetMemberId: string) => {
+  const filteredMembers = (availableFriends || []).filter((friend) =>
+    friend?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    friend?.globalName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleCreateDM = async (targetProfileId: string) => {
     try {
       setIsLoading(true);
 
-      const response = await axios.post("/api/conversations/direct", {
-        memberOneId: currentMember.id,
-        memberTwoId: targetMemberId,
-      });
+        const conversation = await createDirectConversation({
+          otherProfileId: targetProfileId as any,
+          userId: user?.userId,
+        });
 
-      onClose();
-      router.push(`/conversations/${response.data.id}`);
+      if (conversation) {
+        onClose();
+        router.push(`/conversations/${conversation._id}`);
+      }
     } catch (error) {
       console.error("Error creating direct message:", error);
     } finally {
@@ -74,21 +67,20 @@ export const CreateDirectMessageModal = () => {
 
   const handleClose = () => {
     setSearchTerm("");
-    setAvailableMembers([]);
     onClose();
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-white dark:bg-[#313338] p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent className="bg-white dark:bg-[#313338]">
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Start a Direct Message
-          </DialogTitle>
-          <DialogDescription className="text-center text-zinc-500">
+          </DrawerTitle>
+          <DrawerDescription className="text-center text-zinc-500">
             Choose someone to send a direct message to
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         <div className="px-6">
           <div className="relative">
@@ -105,29 +97,32 @@ export const CreateDirectMessageModal = () => {
 
         <ScrollArea className="max-h-[300px] px-6">
           <div className="space-y-2">
-            {filteredMembers.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center gap-x-3 p-2 rounded-lg hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 cursor-pointer transition"
-                onClick={() => handleCreateDM(member.id)}
-              >
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src={member.profile.imageUrl} />
-                  <AvatarFallback>
-                    {member.profile.name?.charAt(0)?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                  <p className="text-sm font-medium">
-                    {member.profile.globalName || member.profile.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    @{member.profile.name}
-                  </p>
+            {filteredMembers.map((friend) => {
+              if (!friend) return null;
+              return (
+                <div
+                  key={friend._id}
+                  className="flex items-center gap-x-3 p-2 rounded-lg hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 cursor-pointer transition"
+                  onClick={() => handleCreateDM(friend._id)}
+                >
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={friend.imageUrl} />
+                    <AvatarFallback>
+                      {friend.name?.charAt(0)?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <p className="text-sm font-medium">
+                      {friend.globalName || friend.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      @{friend.name}
+                    </p>
+                  </div>
+                  <MessageCircle className="w-4 h-4 ml-auto text-muted-foreground" />
                 </div>
-                <MessageCircle className="w-4 h-4 ml-auto text-muted-foreground" />
-              </div>
-            ))}
+              );
+            })}
             {filteredMembers.length === 0 && searchTerm && (
               <div className="text-center py-6 text-muted-foreground">
                 <p>No users found</p>
@@ -136,12 +131,12 @@ export const CreateDirectMessageModal = () => {
           </div>
         </ScrollArea>
 
-        <DialogFooter className="bg-gray-100 dark:bg-[#2b2d31] px-6 py-4">
+        <DrawerFooter className="bg-gray-100 dark:bg-[#2b2d31]">
           <Button variant="ghost" onClick={handleClose} disabled={isLoading}>
             Cancel
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

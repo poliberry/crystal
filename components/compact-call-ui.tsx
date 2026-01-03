@@ -31,7 +31,8 @@ import { ActionTooltip } from "@/components/action-tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLiveKit } from "./providers/media-room-provider";
-import { ConversationType } from "@prisma/client";
+import { ConversationType } from "@/types/conversation";
+import { IconMaximize, IconWindowMinimize } from "@tabler/icons-react";
 
 type CompactCallUIProps = {
   conversationId: string;
@@ -85,7 +86,14 @@ export const CompactCallUI = ({
   };
 
   const toggleScreenShare = () => {
-    localParticipant.setScreenShareEnabled(!localParticipant.isScreenShareEnabled);
+    const isEnabled = localParticipant.isScreenShareEnabled;
+    if (isEnabled) {
+      localParticipant.setScreenShareEnabled(false);
+    } else {
+      localParticipant.setScreenShareEnabled(true, {
+        audio: true
+      });
+    }
   };
 
   const endCall = () => {
@@ -146,7 +154,7 @@ export const CompactCallUI = ({
               size="sm"
               className="h-8 w-8 p-0"
             >
-              <Minimize2 className="h-4 w-4" />
+              <IconWindowMinimize className="h-4 w-4" />
             </Button>
           </ActionTooltip>
           <ActionTooltip label="Expand">
@@ -156,7 +164,7 @@ export const CompactCallUI = ({
               size="sm"
               className="h-8 w-8 p-0"
             >
-              <Maximize2 className="h-4 w-4" />
+              <IconMaximize className="h-4 w-4" />
             </Button>
           </ActionTooltip>
         </div>

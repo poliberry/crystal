@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useEffect, useState, useMemo } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { useRouter } from "next/navigation";
-import { Profile, UserStatus } from "@prisma/client";
 import {
   Dialog,
   DialogContent,
@@ -32,11 +33,20 @@ import {
   Clock,
   ExternalLink,
   Video,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 import { useLiveKit } from "./providers/media-room-provider";
-import { useSocket } from "./providers/socket-provider";
+import { Card } from "./ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PERMISSIONS } from "@/lib/permissions";
 
 interface UserDialogProps {
   children: React.ReactNode;
@@ -45,19 +55,23 @@ interface UserDialogProps {
   mode?: "popup" | "dialog";
 }
 
-interface UserProfileData extends Profile {
+interface UserProfileData {
+  _id: string;
   name: string;
-  bio: string | null;
-  pronouns: string | null;
-  globalName: string | null;
-  bannerUrl: string | null;
+  bio?: string | null;
+  pronouns?: string | null;
+  globalName?: string | null;
+  bannerUrl?: string | null;
+  imageUrl: string;
+  status: string;
   servers?: {
-    id: string;
+    _id: string;
     name: string;
     role: string;
   }[];
-  memberSince?: Date;
+  memberSince?: number;
   mutualServers?: number;
+  role?: string;
 }
 
 export function UserDialog({
@@ -67,58 +81,93 @@ export function UserDialog({
   mode = "popup",
 }: UserDialogProps) {
   const router = useRouter();
-  const { socket } = useSocket();
   const media = useLiveKit();
-  const { user: currentUser } = useUser();
-  const [currentProfile, setCurrentProfile] = useState<any>(null);
-  const [profile, setProfile] = useState<UserProfileData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuthStore();
+  const currentProfile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+  const profile = useQuery(
+    api.profiles.getByIdWithServer,
+    profileId && user?.userId
+      ? serverId
+        ? {
+            profileId: profileId as any,
+            serverId: serverId as any,
+            userId: user.userId,
+          }
+        : { profileId: profileId as any, userId: user.userId }
+      : "skip"
+  );
+  const memberProfile = useQuery(
+    api.members.getByServer,
+    user?.userId && serverId
+      ? { userId: user.userId, serverId: serverId as any }
+      : "skip"
+  );
+
+  // Get all roles for the server
+  const serverRoles =
+    useQuery(
+      api.roles.getByServerId,
+      serverId ? { serverId: serverId as any } : "skip"
+    ) || [];
+
+  // Get server data for owner check
+  const server = useQuery(
+    api.servers.getById,
+    serverId ? { serverId: serverId as any } : "skip"
+  );
+
+  // Get current user's member record for permission checking
+  const currentUserMember = memberProfile?.find(
+    (member: any) =>
+      member.profileId === currentProfile?._id ||
+      member.profile?._id === currentProfile?._id ||
+      member.profile?.id === currentProfile?._id
+  );
+
+  // Check if current user has MANAGE_ROLES permission
+  const hasManageRolesPermission = useMemo(() => {
+    if (!serverId || !currentUserMember) return false;
+
+    // Server owner always has permission
+    if (server?.profileId === currentProfile?._id) return true;
+
+    // Check if user has ADMIN role
+    if (currentUserMember.role === "ADMIN") return true;
+
+    // Check if user has a role with MANAGE_ROLES or ADMINISTRATOR permission
+    const roleIds =
+      currentUserMember.roleIds ||
+      (currentUserMember.roleId ? [currentUserMember.roleId] : []);
+    const roles =
+      currentUserMember.roles ||
+      roleIds
+        .map((id: string) => serverRoles.find((r: any) => r._id === id))
+        .filter(Boolean);
+
+    for (const role of roles) {
+      if (
+        role?.permissions?.includes(PERMISSIONS.MANAGE_ROLES) ||
+        role?.permissions?.includes(PERMISSIONS.ADMINISTRATOR)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [serverId, currentUserMember, currentProfile, serverRoles, server]);
+
+  const toggleRole = useMutation(api.members.toggleRole);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
 
-  // Fetch current profile
-  useEffect(() => {
-    const fetchCurrentProfile = async () => {
-      try {
-        const response = await fetch("/api/profile");
-        if (response.ok) {
-          const data = await response.json();
-          setCurrentProfile(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch current profile:", error);
-      }
-    };
+  const loading = profile === undefined;
 
-    if (currentUser) {
-      fetchCurrentProfile();
-    }
-  }, [currentUser]);
-
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `/api/profile/${profileId}?serverId=${serverId || ""}`
-      );
-      if (response.ok) {
-        const userData = await response.json();
-        setProfile(userData);
-      } else {
-        // Use dummy data if API fails
-        setProfile(null);
-      }
-    } catch (error) {
-      console.error("Failed to fetch user profile:", error);
-      // Use dummy data on error
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStatusColor = (status: UserStatus) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "ONLINE":
         return "bg-green-500";
@@ -133,7 +182,7 @@ export function UserDialog({
     }
   };
 
-  const getStatusText = (status: UserStatus) => {
+  const getStatusText = (status: string) => {
     switch (status) {
       case "ONLINE":
         return "Online";
@@ -149,28 +198,32 @@ export function UserDialog({
     }
   };
 
-  const isCurrentUser = currentUser?.id === profileId;
+  const isCurrentUser = currentProfile?._id === profileId;
   const displayProfile = profile || null;
 
+  // Find the member from the server members array that matches this profileId
+  const currentMember = memberProfile?.find(
+    (member: any) =>
+      member.profileId === profileId ||
+      member.profile?._id === profileId ||
+      member.profile?.id === profileId
+  );
+  const memberRoles = currentMember?.roles || [];
+
   const createOrNavigateToConversation = async () => {
-    if (!currentUser || !profileId) return;
+    if (!currentProfile || !profileId || !user?.userId) return;
 
     setCreatingConversation(true);
     try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          participantIds: [profileId],
-          type: "DIRECT_MESSAGE",
-        }),
+      const conversation = await createDirectConversation({
+        otherProfileId: profileId as any,
+        userId: user.userId,
       });
 
-      if (response.ok) {
-        const conversation = await response.json();
+      if (conversation) {
         setIsPopoverOpen(false);
         setIsDialogOpen(false);
-        router.push(`/conversations/${conversation.id}`);
+        router.push(`/conversations/${conversation._id}`);
       }
     } catch (error) {
       console.error("Failed to create/navigate to conversation:", error);
@@ -179,43 +232,63 @@ export function UserDialog({
     }
   };
 
+  const createDirectConversation = useMutation(api.conversations.createDirect);
+
   const startVoiceCall = async () => {
-    if (!currentProfile || !profileId) return;
+    if (!currentProfile || !profileId || !user?.userId) return;
 
     setCreatingConversation(true);
     try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          participantIds: [profileId],
-          type: "DIRECT_MESSAGE",
-        }),
+      const conversation = await createDirectConversation({
+        otherProfileId: profileId as any,
+        userId: user.userId,
       });
 
-      if (response.ok) {
-        const conversation = await response.json();
+      if (conversation) {
         const conversationName =
           profile?.globalName || profile?.name || "Voice Call";
 
-        // Emit websocket event
-        socket?.emit("call:start", {
-          conversationId: conversation.id,
-          type: "voice",
-          callerId: currentProfile.id,
-          callerName: currentProfile.globalName || currentProfile.name,
-          callerAvatar: currentProfile.imageUrl,
-          participantIds: conversation.members?.map(
-            (m: any) => m.member.profile.id
-          ) || [profileId],
-        });
+        // Send notification to the other user
+        if (profile?.userId) {
+          try {
+            const response = await fetch("/api/notifications/incoming-dm-call", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                subscriberId: profile.userId,
+                title: "Incoming Voice Call",
+                body: `${currentProfile.globalName || currentProfile.name} is calling you`,
+                imageUrl: currentProfile.imageUrl,
+                conversationId: conversation._id,
+                conversationName: conversationName,
+                callerName: currentProfile.globalName || currentProfile.name,
+                callerId: currentProfile._id,
+                isVideo: false,
+              }),
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.error("Failed to send call notification:", response.status, errorData);
+            } else {
+              const result = await response.json();
+              console.log("Call notification sent successfully:", result);
+            }
+          } catch (notifError) {
+            console.error("Failed to send call notification:", notifError);
+          }
+        } else {
+          console.warn("Cannot send call notification: profile.userId is missing", { profile });
+        }
 
         setIsPopoverOpen(false);
         setIsDialogOpen(false);
 
         // Start the call and navigate
-        media.joinConversation(conversation.id, conversationName, true, false);
-        router.push(`/conversations/${conversation.id}?audio=true`);
+        media.joinConversation(conversation._id, conversationName, true, false);
+        router.push(`/conversations/${conversation._id}?audio=true`);
       }
     } catch (error) {
       console.error("Failed to start voice call:", error);
@@ -225,42 +298,60 @@ export function UserDialog({
   };
 
   const startVideoCall = async () => {
-    if (!currentProfile || !profileId) return;
+    if (!currentProfile || !profileId || !user?.userId) return;
 
     setCreatingConversation(true);
     try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          participantIds: [profileId],
-          type: "DIRECT_MESSAGE",
-        }),
+      const conversation = await createDirectConversation({
+        otherProfileId: profileId as any,
+        userId: user.userId,
       });
 
-      if (response.ok) {
-        const conversation = await response.json();
+      if (conversation) {
         const conversationName =
           profile?.globalName || profile?.name || "Video Call";
 
-        // Emit websocket event
-        socket?.emit("call:start", {
-          conversationId: conversation.id,
-          type: "video",
-          callerId: currentProfile.id,
-          callerName: currentProfile.globalName || currentProfile.name,
-          callerAvatar: currentProfile.imageUrl,
-          participantIds: conversation.members?.map(
-            (m: any) => m.member.profile.id
-          ) || [profileId],
-        });
+        // Send notification to the other user
+        if (profile?.userId) {
+          try {
+            const response = await fetch("/api/notifications/incoming-dm-call", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                subscriberId: profile.userId,
+                title: "Incoming Video Call",
+                body: `${currentProfile.globalName || currentProfile.name} is calling you`,
+                imageUrl: currentProfile.imageUrl,
+                conversationId: conversation._id,
+                conversationName: conversationName,
+                callerName: currentProfile.globalName || currentProfile.name,
+                callerId: currentProfile._id,
+                isVideo: true,
+              }),
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.error("Failed to send call notification:", response.status, errorData);
+            } else {
+              const result = await response.json();
+              console.log("Call notification sent successfully:", result);
+            }
+          } catch (notifError) {
+            console.error("Failed to send call notification:", notifError);
+          }
+        } else {
+          console.warn("Cannot send call notification: profile.userId is missing", { profile });
+        }
 
         setIsPopoverOpen(false);
         setIsDialogOpen(false);
 
         // Start the call and navigate
-        media.joinConversation(conversation.id, conversationName, true, true);
-        router.push(`/conversations/${conversation.id}?video=true`);
+        media.joinConversation(conversation._id, conversationName, true, true);
+        router.push(`/conversations/${conversation._id}?video=true`);
       }
     } catch (error) {
       console.error("Failed to start video call:", error);
@@ -271,7 +362,7 @@ export function UserDialog({
 
   // Popup Card Content
   const PopupContent = () => (
-    <div className="w-auto min-w-80 max-w-80 p-0 bg-background rounded-lg overflow-hidden">
+    <Card className="w-auto min-w-80 max-w-80 p-0 rounded-none overflow-hidden">
       {loading ? (
         <div className="flex items-center justify-center p-6">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
@@ -294,20 +385,21 @@ export function UserDialog({
             {/* Avatar and basic info */}
             <div className="flex items-start gap-3 -mt-12 -ml-2">
               <div className="relative">
-                <Avatar className="w-20 h-20 border-[5px] border-background">
+                <Avatar className="w-20 h-20 border-[5px] after:border-none border-card rounded-none">
                   <AvatarImage
                     src={displayProfile?.imageUrl}
                     alt={displayProfile?.name}
+                    className="rounded-none"
                   />
-                  <AvatarFallback>
+                  <AvatarFallback className="rounded-none">
                     {displayProfile?.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="absolute bottom-0 right-0">
                   <div
                     className={cn(
-                      "w-6 h-6 rounded-full border-[5px] border-background",
-                      getStatusColor(displayProfile?.status as UserStatus)
+                      "w-6 h-6 border-[5px] border-card",
+                      getStatusColor(displayProfile?.status || "OFFLINE")
                     )}
                   />
                 </div>
@@ -339,13 +431,101 @@ export function UserDialog({
               </p>
             </div>
 
+            <div className="flex flex-wrap gap-1 items-center">
+              {memberRoles.length > 0 && (
+                <>
+                  {memberRoles.map((role: any) => (
+                    <Badge
+                      key={role._id}
+                      variant="secondary"
+                      className="text-xs"
+                      style={
+                        role.color
+                          ? {
+                              backgroundColor: `${role.color}20`,
+                              borderColor: role.color,
+                              color: role.color,
+                            }
+                          : undefined
+                      }
+                    >
+                      {role.name}
+                    </Badge>
+                  ))}
+                </>
+              )}
+              {hasManageRolesPermission && serverId && currentMember && (
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Select
+                    onValueChange={async (roleId) => {
+                      try {
+                        await toggleRole({
+                          memberId: currentMember._id,
+                          roleId: roleId as any,
+                          userId: user?.userId,
+                        });
+                      } catch (error) {
+                        console.error("Failed to toggle role:", error);
+                        alert(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to toggle role"
+                        );
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="px-1 py-0 border-dashed">
+                      <Plus className="h-4 w-4 p-0" />
+                    </SelectTrigger>
+                    <SelectContent side="bottom" align="start" className="z-[101] border-border border-1">
+                      {serverRoles
+                        .filter((role: any) => {
+                          // Filter out roles already assigned
+                          const memberRoleIds =
+                            currentMember.roleIds ||
+                            (currentMember.roleId
+                              ? [currentMember.roleId]
+                              : []);
+                          return !memberRoleIds.includes(role._id);
+                        })
+                        .map((role: any) => (
+                          <SelectItem key={role._id} value={role._id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{
+                                  backgroundColor: role.color || "#5865F2",
+                                }}
+                              />
+                              <span>{role.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      {serverRoles.filter((role: any) => {
+                        const memberRoleIds =
+                          currentMember.roleIds ||
+                          (currentMember.roleId ? [currentMember.roleId] : []);
+                        return !memberRoleIds.includes(role._id);
+                      }).length === 0 && (
+                        <SelectItem value="" disabled>
+                          No roles available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
             {/* Quick info */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-muted-foreground">
-                  Joined{" "}
-                  {dayjs(displayProfile?.createdAt).format("MMM YYYY")}
+                  Joined {dayjs(displayProfile?.createdAt).format("MMM YYYY")}
                 </span>
               </div>
             </div>
@@ -413,7 +593,7 @@ export function UserDialog({
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 
   // Full Dialog Content
@@ -433,10 +613,11 @@ export function UserDialog({
         <div className="absolute -bottom-8 left-4">
           <div className="relative flex items-start gap-3">
             <div className="relative">
-              <Avatar className="w-16 h-16 border-4 border-background">
+              <Avatar className="w-16 h-16 border-4 border-card rounded-none after:border-none">
                 <AvatarImage
                   src={displayProfile?.imageUrl}
                   alt={displayProfile?.name}
+                  className="rounded-none"
                 />
                 <AvatarFallback>
                   {displayProfile?.name.charAt(0).toUpperCase()}
@@ -447,8 +628,8 @@ export function UserDialog({
               <div className="absolute -bottom-1 -right-1">
                 <div
                   className={cn(
-                    "w-5 h-5 rounded-full border-2 border-background",
-                    getStatusColor(displayProfile?.status as UserStatus)
+                    "w-5 h-5 rounded-full border-2 border-card",
+                    getStatusColor(displayProfile?.status || "OFFLINE")
                   )}
                 />
               </div>
@@ -506,8 +687,7 @@ export function UserDialog({
               <span className="text-muted-foreground">
                 Member since{" "}
                 {dayjs(
-                  displayProfile?.memberSince ||
-                    displayProfile?.createdAt
+                  displayProfile?.memberSince || displayProfile?.createdAt
                 ).format("MMM DD, YYYY")}
               </span>
             </div>
@@ -515,27 +695,108 @@ export function UserDialog({
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">
-                Joined{" "}
-                {dayjs(displayProfile?.createdAt).format("MMM DD, YYYY")}
+                Joined {dayjs(displayProfile?.createdAt).format("MMM DD, YYYY")}
               </span>
             </div>
           </div>
 
-          {/* Server Roles - Always show with dummy data */}
+          {/* Server Roles */}
           <div>
             <h3 className="text-sm font-semibold mb-2">Roles</h3>
-            <div className="flex flex-wrap gap-1">
-              {(displayProfile?.servers || []).map((server) => (
-                <Badge key={server.id} variant="secondary" className="text-xs">
-                  {server.role === "ADMIN" && (
-                    <Shield className="h-3 w-3 mr-1" />
-                  )}
-                  {server.role === "MODERATOR" && (
-                    <Crown className="h-3 w-3 mr-1" />
-                  )}
-                  {server.role.charAt(0) + server.role.slice(1).toLowerCase()}
-                </Badge>
-              ))}
+            <div className="flex flex-wrap gap-1 items-center">
+              {memberRoles.length > 0 && (
+                <>
+                  {memberRoles.map((role: any) => (
+                    <Badge
+                      key={role._id}
+                      variant="secondary"
+                      className="text-xs"
+                      style={
+                        role.color
+                          ? {
+                              backgroundColor: `${role.color}20`,
+                              borderColor: role.color,
+                              color: role.color,
+                            }
+                          : undefined
+                      }
+                    >
+                      {role.name}
+                    </Badge>
+                  ))}
+                </>
+              )}
+              {hasManageRolesPermission && serverId && currentMember && (
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Select
+                    onValueChange={async (roleId) => {
+                      try {
+                        await toggleRole({
+                          memberId: currentMember._id,
+                          roleId: roleId as any,
+                          userId: user?.userId,
+                        });
+                      } catch (error) {
+                        console.error("Failed to toggle role:", error);
+                        alert(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to toggle role"
+                        );
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-6 w-6 p-0 border-dashed">
+                      <SelectValue>
+                        <Plus className="h-4 w-4" />
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="z-[101]">
+                      {serverRoles
+                        .filter((role: any) => {
+                          // Filter out roles already assigned
+                          const memberRoleIds =
+                            currentMember.roleIds ||
+                            (currentMember.roleId
+                              ? [currentMember.roleId]
+                              : []);
+                          return !memberRoleIds.includes(role._id);
+                        })
+                        .map((role: any) => (
+                          <SelectItem key={role._id} value={role._id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{
+                                  backgroundColor: role.color || "#5865F2",
+                                }}
+                              />
+                              <span>{role.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      {serverRoles.filter((role: any) => {
+                        const memberRoleIds =
+                          currentMember.roleIds ||
+                          (currentMember.roleId ? [currentMember.roleId] : []);
+                        return !memberRoleIds.includes(role._id);
+                      }).length === 0 && (
+                        <SelectItem value="" disabled>
+                          No roles available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {memberRoles.length === 0 && !hasManageRolesPermission && (
+                <p className="text-xs text-muted-foreground">
+                  No roles assigned
+                </p>
+              )}
             </div>
           </div>
 
@@ -583,11 +844,20 @@ export function UserDialog({
     </div>
   );
 
+  // Handler to open dialog/popover (profile is already fetched via useQuery)
+  const handleOpen = () => {
+    if (mode === "dialog") {
+      setIsDialogOpen(true);
+    } else {
+      setIsPopoverOpen(true);
+    }
+  };
+
   // Return based on mode
   if (mode === "dialog") {
     return (
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild onClick={fetchUserProfile}>
+        <DialogTrigger className="w-full" onClick={handleOpen}>
           {children}
         </DialogTrigger>
         <DialogContent className="sm:max-w-md p-0 gap-0 bg-background border-none">
@@ -608,7 +878,7 @@ export function UserDialog({
     <>
       {/* Popover for hover preview */}
       <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-        <PopoverTrigger asChild onClick={fetchUserProfile}>
+        <PopoverTrigger className="w-full" onClick={handleOpen}>
           {children}
         </PopoverTrigger>
         <PopoverContent
@@ -623,8 +893,8 @@ export function UserDialog({
 
       {/* Dialog for full view */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild>
-          <div style={{ display: "none" }} />
+        <DialogTrigger className="hidden">
+          <div />
         </DialogTrigger>
         <DialogContent className="sm:max-w-md p-0 gap-0 bg-background border-none">
           {loading ? (

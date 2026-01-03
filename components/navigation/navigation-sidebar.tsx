@@ -1,11 +1,13 @@
-import { SignOutButton, SignedIn, currentUser } from "@clerk/nextjs";
-import { LogOut } from "lucide-react";
+"use client";
+
+import { useQuery } from "convex/react";
+import { Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
 
 import { NavigationAction } from "./navigation-action";
 import { NavigationItem } from "./navigation-item";
@@ -15,20 +17,30 @@ import { ConversationNotificationBar } from "./conversation-notification-bar";
 import { Separator } from "../ui/separator";
 import { NotificationBadge } from "../notification-badge";
 
-export const NavigationSidebar = async () => {
-  const profile = await currentProfile();
+export const NavigationSidebar = () => {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+  const servers = useQuery(
+    api.servers.getMyServers,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-  if (!profile) redirect("/");
+  if (profile === undefined || servers === undefined) {
+    return (
+      <div className="flex items-center justify-center h-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
-  const servers = await db.server.findMany({
-    where: {
-      members: {
-        some: {
-          profileId: profile.id,
-        },
-      },
-    },
-  });
+  if (!profile) {
+    router.push("/sign-in");
+    return null;
+  }
 
   const CARD_HEIGHT = 499;
 
@@ -61,12 +73,12 @@ export const NavigationSidebar = async () => {
         <Separator orientation="vertical" className="mx-1 h-6" />
 
         <div className={`w-full flex items-center h-12 m-0 overflow-x-auto`}>
-          {servers.map((server) => (
-            <div key={server.id}>
+          {servers?.map((server) => (
+            <div key={server?._id as Id<"servers">}>
               <NavigationItem
-                id={server.id}
-                name={server.name}
-                imageUrl={server.imageUrl}
+                id={server?._id as Id<"servers">}
+                name={server?.name ?? ""}
+                imageUrl={server?.imageUrl ?? ""}
               />
             </div>
           ))}
@@ -74,7 +86,7 @@ export const NavigationSidebar = async () => {
         </div>
 
         <div className="justify-self-end flex items-center">
-          <UserCard profile={profile} />
+          <UserCard />
         </div>
       </div>
     </div>

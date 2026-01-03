@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuthStore } from "@/lib/auth-store";
 
 const LAST_PATH_KEY = "discord-clone-last-path";
 const EXCLUDED_PATHS = [
@@ -18,7 +18,7 @@ const EXCLUDED_PATHS = [
 export const usePathTracker = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, isLoaded } = useUser();
+  const { user, isAuthenticated } = useAuthStore();
 
   // Function to check if a path should be excluded from tracking
   const shouldExcludePath = (path: string): boolean => {
@@ -70,20 +70,20 @@ export const usePathTracker = () => {
 
   // Track path changes
   useEffect(() => {
-    if (isLoaded && pathname && user) {
+    if (pathname && user && isAuthenticated) {
       // Save the current path if it's not excluded
       if (!shouldExcludePath(pathname)) {
         saveCurrentPath(pathname);
       }
     }
-  }, [pathname, user, isLoaded]);
+  }, [pathname, user, isAuthenticated]);
 
   // Clear path when user logs out
   useEffect(() => {
-    if (isLoaded && !user) {
+    if (!user || !isAuthenticated) {
       clearLastPath();
     }
-  }, [user, isLoaded]);
+  }, [user, isAuthenticated]);
 
   return {
     saveCurrentPath,

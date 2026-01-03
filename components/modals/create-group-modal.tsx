@@ -1,17 +1,18 @@
 "use client";
 
-import axios from "axios";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,10 +21,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Users, Check, X } from "lucide-react";
 import { useEffect } from "react";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const CreateGroupModal = () => {
   const { isOpen, onClose, type, data } = useModal();
   const router = useRouter();
+  const { user } = useAuthStore();
+  const createGroupConversation = useMutation(api.conversations.createGroup);
 
   const isModalOpen = isOpen && type === "createGroup";
   const { currentMember, currentProfile } = data;
@@ -32,33 +36,27 @@ export const CreateGroupModal = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [groupName, setGroupName] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [availableMembers, setAvailableMembers] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (isModalOpen && currentMember) {
-      fetchAvailableMembers();
-    }
-  }, [isModalOpen, currentMember]);
-
-  const fetchAvailableMembers = async () => {
-    try {
-      const response = await axios.get(`/api/members/available/${currentMember.id}`);
-      setAvailableMembers(response.data);
-    } catch (error) {
-      console.error("Error fetching members:", error);
-    }
-  };
-
-  const filteredMembers = availableMembers.filter((member) =>
-    member.profile.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.profile.globalName?.toLowerCase().includes(searchTerm.toLowerCase())
+  const availableMembers = useQuery(
+    api.friends.getFriends,
+    user?.userId ? { userId: user.userId } : "skip"
   );
 
-  const toggleMemberSelection = (memberId: string) => {
+  const filteredMembers = (availableMembers || []).filter((member) => {
+    if (!member) return false;
+    if (!searchTerm.trim()) return true; // Show all friends when search is empty
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      member.name?.toLowerCase().includes(searchLower) ||
+      member.globalName?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const toggleMemberSelection = (profileId: string) => {
     setSelectedMembers((prev) =>
-      prev.includes(memberId)
-        ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId]
+      prev.includes(profileId)
+        ? prev.filter((id) => id !== profileId)
+        : [...prev, profileId]
     );
   };
 
@@ -71,14 +69,16 @@ export const CreateGroupModal = () => {
         return;
       }
 
-      const response = await axios.post("/api/conversations/group", {
-        creatorId: currentMember.id,
-        memberIds: selectedMembers,
+      const conversation = await createGroupConversation({
         name: groupName.trim() || undefined,
+        memberIds: selectedMembers as any[],
+        userId: user?.userId,
       });
 
-      onClose();
-      router.push(`/conversations/${response.data.id}`);
+      if (conversation) {
+        onClose();
+        router.push(`/conversations/${conversation._id}`);
+      }
     } catch (error) {
       console.error("Error creating group:", error);
     } finally {
@@ -90,23 +90,22 @@ export const CreateGroupModal = () => {
     setSearchTerm("");
     setGroupName("");
     setSelectedMembers([]);
-    setAvailableMembers([]);
     onClose();
   };
 
   const canCreate = selectedMembers.length >= 1;
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-white dark:bg-[#313338] p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent className="bg-white dark:bg-[#313338]">
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Create a Group
-          </DialogTitle>
-          <DialogDescription className="text-center text-zinc-500">
+          </DrawerTitle>
+          <DrawerDescription className="text-center text-zinc-500">
             Add friends to start a group conversation
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         <div className="px-6 space-y-4">
           {/* Group Name */}
@@ -147,18 +146,18 @@ export const CreateGroupModal = () => {
                 Selected ({selectedMembers.length})
               </Label>
               <div className="flex flex-wrap gap-2 mt-1">
-                {selectedMembers.map((memberId) => {
-                  const member = availableMembers.find((m) => m.id === memberId);
+                {selectedMembers.map((profileId) => {
+                  const member = availableMembers?.find((m) => m?._id === profileId) as any;
                   if (!member) return null;
                   
                   return (
                     <div
-                      key={memberId}
+                      key={profileId}
                       className="flex items-center gap-1 bg-indigo-500 text-white px-2 py-1 rounded-full text-xs"
                     >
-                      <span>{member.profile.globalName || member.profile.name}</span>
+                      <span>{member.globalName || member.name}</span>
                       <button
-                        onClick={() => toggleMemberSelection(memberId)}
+                        onClick={() => toggleMemberSelection(profileId)}
                         className="hover:bg-indigo-600 rounded-full p-0.5"
                       >
                         <X className="w-3 h-3" />
@@ -174,13 +173,14 @@ export const CreateGroupModal = () => {
         <ScrollArea className="max-h-[200px] px-6">
           <div className="space-y-2">
             {filteredMembers.map((member) => {
-              const isSelected = selectedMembers.includes(member.id);
+              const isSelected = selectedMembers.includes(member?._id || "");
+              if (!member) return null;
               
               return (
                 <div
-                  key={member.id}
+                  key={member._id}
                   className="flex items-center gap-x-3 p-2 rounded-lg hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 cursor-pointer transition"
-                  onClick={() => toggleMemberSelection(member.id)}
+                  onClick={() => toggleMemberSelection(member._id)}
                 >
                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                     isSelected 
@@ -190,17 +190,17 @@ export const CreateGroupModal = () => {
                     {isSelected && <Check className="w-3 h-3 text-white" />}
                   </div>
                   <Avatar className="w-8 h-8">
-                    <AvatarImage src={member.profile.imageUrl} />
+                    <AvatarImage src={member.imageUrl} />
                     <AvatarFallback>
-                      {member.profile.name?.charAt(0)?.toUpperCase()}
+                      {member.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col flex-1">
                     <p className="text-sm font-medium">
-                      {member.profile.globalName || member.profile.name}
+                      {member.globalName || member.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      @{member.profile.name}
+                      @{member.name}
                     </p>
                   </div>
                   {isSelected && (
@@ -209,15 +209,23 @@ export const CreateGroupModal = () => {
                 </div>
               );
             })}
-            {filteredMembers.length === 0 && searchTerm && (
+            {filteredMembers.length === 0 && (
               <div className="text-center py-6 text-muted-foreground">
-                <p>No users found</p>
+                <p>
+                  {searchTerm 
+                    ? "No users found" 
+                    : availableMembers === undefined 
+                      ? "Loading..." 
+                      : availableMembers.length === 0 
+                        ? "No friends available. Add friends to create a group."
+                        : "No users found"}
+                </p>
               </div>
             )}
           </div>
         </ScrollArea>
 
-        <DialogFooter className="bg-gray-100 dark:bg-[#2b2d31] px-6 py-4">
+        <DrawerFooter className="bg-gray-100 dark:bg-[#2b2d31]">
           <Button variant="ghost" onClick={handleClose} disabled={isLoading}>
             Cancel
           </Button>
@@ -235,8 +243,8 @@ export const CreateGroupModal = () => {
               </>
             )}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

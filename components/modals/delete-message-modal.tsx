@@ -1,19 +1,20 @@
 "use client";
 
-import axios from "axios";
-import qs from "query-string";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useModal } from "@/hooks/use-modal-store";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 export const DeleteMessageModal = () => {
   const { isOpen, onClose, type, data } = useModal();
@@ -22,17 +23,30 @@ export const DeleteMessageModal = () => {
 
   const isModalOpen = isOpen && type === "deleteMessage";
 
-  const { apiUrl, query } = data;
+  const { messageId, messageType } = data;
+  
+  // Use the appropriate mutation based on message type
+  const removeChannelMessage = useMutation(api.messages.remove);
+  const removeDirectMessage = useMutation(api.directMessages.remove);
 
   const onClick = async () => {
     try {
       setIsLoading(true);
-      const url = qs.stringifyUrl({
-        url: apiUrl || "",
-        query,
-      });
+      
+      if (!messageId || !messageType) {
+        console.error("Missing messageId or messageType");
+        return;
+      }
 
-      await axios.delete(url);
+      if (messageType === "messages") {
+        await removeChannelMessage({ 
+          messageId: messageId as Id<"messages"> 
+        });
+      } else if (messageType === "directMessages") {
+        await removeDirectMessage({ 
+          messageId: messageId as Id<"directMessages"> 
+        });
+      }
 
       onClose();
     } catch (error: unknown) {
@@ -43,20 +57,20 @@ export const DeleteMessageModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={onClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={onClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Delete Message
-          </DialogTitle>
+          </DrawerTitle>
 
-          <DialogDescription className="text-center">
+          <DrawerDescription className="text-center">
             Are you sure you want to do this? <br />
-            The message will be will be permanently deleted.
-          </DialogDescription>
-        </DialogHeader>
+            The message will be permanently deleted.
+          </DrawerDescription>
+        </DrawerHeader>
 
-        <DialogFooter className="bg-gray-100/90 dark:bg-gray-100/10 px-6 py-4">
+        <DrawerFooter>
           <div className="flex items-center justify-between w-full">
             <Button
               disabled={isLoading}
@@ -75,8 +89,8 @@ export const DeleteMessageModal = () => {
               Confirm
             </Button>
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

@@ -1,19 +1,20 @@
-"use client"
+"use client";
 
 import {
   MemberRole,
   type Member,
   type Profile,
   type Server,
-} from "@prisma/client";
+} from "@/types/conversation";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 
 import { cn } from "@/lib/utils";
 
 import { UserAvatar } from "../user-avatar";
-import { useEffect, useState } from "react";
-import { useSocket } from "../providers/socket-provider";
 
 type ServerMemberProps = {
   member: Member & { profile: Profile };
@@ -29,8 +30,20 @@ const roleIconMap = {
   [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
 };
 
-export const ServerMember = ({ member, profile, server }: ServerMemberProps) => {
-  const { socket } = useSocket();
+export const ServerMember = ({
+  member,
+  profile,
+  server,
+}: ServerMemberProps) => {
+  const { user } = useAuthStore();
+  // Get real-time profile status from Convex
+  const memberProfile = useQuery(
+    api.profiles.getByUserId,
+    member.profile.userId && user?.userId
+      ? { userId: member.profile.userId }
+      : "skip"
+  );
+
   const onClick = () => {
     if (member.profile.name === profile?.name) {
       router.push(`/conversations/me`);
@@ -41,26 +54,15 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
   };
   const params = useParams();
   const router = useRouter();
-  const [status, setStatus] = useState<"ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE">(member.profile.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
-  const icon = roleIconMap[member.role];
 
-  // Listen for socket status updates
-  useEffect(() => {
-    const handler = (payload: { userId: string; status: string }) => {
-      if (payload.userId === member.profile.userId) {
-        const allowedStatuses = ["ONLINE", "IDLE", "DND", "INVISIBLE", "OFFLINE"];
-        if (allowedStatuses.includes(payload.status)) {
-          setStatus(payload.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
-        }
-      }
-    };
-    // @ts-ignore
-    socket.on("user:status:update", handler);
-    return () => {
-      // @ts-ignore
-      socket.off("user:status:update", handler);
-    };
-  }, [member.profile.userId]);
+  // Use status from Convex query, fallback to member prop
+  const status = (memberProfile?.status || member.profile.status) as
+    | "ONLINE"
+    | "IDLE"
+    | "DND"
+    | "INVISIBLE"
+    | "OFFLINE";
+  const icon = roleIconMap[member.role];
 
   // Status indicator mapping
   const statusMap: Record<string, { color: string; text: string }> = {
@@ -77,7 +79,7 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
       onClick={onClick}
       className={cn(
         "group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition mb-1",
-        params?.memberId === member.id && "bg-zinc-700/20 dark:bg-zinc-700",
+        params?.memberId === member.id && "bg-zinc-700/20 dark:bg-zinc-700"
       )}
     >
       <div className="relative">

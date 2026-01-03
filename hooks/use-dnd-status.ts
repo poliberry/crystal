@@ -1,59 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export const useDNDStatus = () => {
-  const [isDND, setIsDND] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const profile = useQuery(api.profiles.getCurrent);
+  const updateStatusMutation = useMutation(api.profiles.updateStatus);
 
-  // Fetch status from database
-  const fetchStatus = async () => {
-    try {
-      const response = await axios.get("/api/user/status");
-      const { status, isDND: dndStatus } = response.data;
-      setCurrentStatus(status);
-      setIsDND(dndStatus);
-    } catch (error) {
-      console.error("Failed to fetch user status:", error);
-      // Fallback to localStorage if API fails
-      if (typeof window !== "undefined") {
-        const storedStatus = localStorage.getItem("user-presence-status");
-        if (storedStatus) {
-          setCurrentStatus(storedStatus);
-          setIsDND(storedStatus === "DND");
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const currentStatus = profile?.status || null;
+  const isDND = currentStatus === "DND";
+  const loading = profile === undefined;
 
-  useEffect(() => {
-    fetchStatus();
-  }, []);
-
-  // Function to update status both in DB and localStorage
+  // Function to update status
   const updateStatus = async (newStatus: string) => {
+    if (!profile) return;
+    
     try {
-      setLoading(true);
-      const response = await axios.patch("/api/user/status", {
-        status: newStatus
+      await updateStatusMutation({
+        status: newStatus as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE",
       });
-      const { status, isDND: dndStatus } = response.data;
-      setCurrentStatus(status);
-      setIsDND(dndStatus);
       
       // Also update localStorage for immediate access
       if (typeof window !== "undefined") {
-        localStorage.setItem("user-presence-status", status);
+        localStorage.setItem("user-presence-status", newStatus);
       }
     } catch (error) {
       console.error("Failed to update user status:", error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -62,38 +35,34 @@ export const useDNDStatus = () => {
     currentStatus,
     loading,
     updateStatus,
-    refetchStatus: fetchStatus,
+    refetchStatus: () => {}, // Convex queries auto-refetch
   };
 };
 
 // Enhanced utility function to check if user should receive notifications
-export const shouldReceiveNotifications = async (): Promise<boolean> => {
-  try {
-    const response = await axios.get("/api/user/status");
-    return !response.data.isDND;
-  } catch (error) {
-    // Fallback to localStorage if API fails
+export const shouldReceiveNotifications = (profile: { status: string } | null | undefined): boolean => {
+  if (!profile) {
+    // Fallback to localStorage if profile not available
     if (typeof window !== "undefined") {
       const status = localStorage.getItem("user-presence-status");
       return status !== "DND";
     }
-    return true; // Default to allowing notifications if we can't determine status
+    return true; // Default to allowing notifications
   }
+  return profile.status !== "DND";
 };
 
 // Enhanced utility function to check if user should receive call alerts
-export const shouldReceiveCallAlerts = async (): Promise<boolean> => {
-  try {
-    const response = await axios.get("/api/user/status");
-    return !response.data.isDND;
-  } catch (error) {
-    // Fallback to localStorage if API fails
+export const shouldReceiveCallAlerts = (profile: { status: string } | null | undefined): boolean => {
+  if (!profile) {
+    // Fallback to localStorage if profile not available
     if (typeof window !== "undefined") {
       const status = localStorage.getItem("user-presence-status");
       return status !== "DND";
     }
-    return true; // Default to allowing call alerts if we can't determine status
+    return true; // Default to allowing call alerts
   }
+  return profile.status !== "DND";
 };
 
 // Synchronous utility function to get current user status from localStorage (for immediate checks)
@@ -102,13 +71,10 @@ export const getCurrentUserStatusSync = (): string | null => {
   return localStorage.getItem("user-presence-status");
 };
 
-// Async utility function to get current user status from database
-export const getCurrentUserStatus = async (): Promise<string | null> => {
-  try {
-    const response = await axios.get("/api/user/status");
-    return response.data.status;
-  } catch (error) {
-    console.error("Failed to fetch user status:", error);
-    return getCurrentUserStatusSync();
+// Get current user status from Convex query result
+export const getCurrentUserStatus = (profile: { status: string } | null | undefined): string | null => {
+  if (profile) {
+    return profile.status;
   }
+  return getCurrentUserStatusSync();
 };

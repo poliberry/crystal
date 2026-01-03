@@ -29,8 +29,9 @@ export const ServerChannelList = ({
 
   // Helper function to get the other profile in a direct message
   const getDirectMessagePartner = (conversation: any) => {
+    if (!conversation.members) return null;
     const otherMember = conversation.members.find(
-      (member: any) => member.profileId !== currentProfile.id
+      (member: any) => member.profileId !== currentProfile._id && member.profileId !== currentProfile.id
     );
     return otherMember?.profile;
   };
@@ -58,18 +59,26 @@ export const ServerChannelList = ({
 
   return (
     <div className="space-y-[2px]">
-      {conversations.map((conversation) => (
-        <ConversationChannel
-          key={conversation.id}
-          conversation={conversation}
-          currentProfile={currentProfile}
-          name={getConversationName(conversation)}
-          avatar={getConversationAvatar(conversation)}
-          type={conversation.type}
-          lastMessage={conversation.directMessages[0]}
-          memberCount={conversation.members.length}
-        />
-      ))}
+      {conversations.map((conversation) => {
+        // Safely get last message - check for lastMessage from Convex or directMessages array
+        const lastMessage = conversation.lastMessage || 
+          (conversation.directMessages && conversation.directMessages.length > 0 
+            ? conversation.directMessages[0] 
+            : null);
+
+        return (
+          <ConversationChannel
+            key={conversation._id || conversation.id}
+            conversation={conversation}
+            currentProfile={currentProfile}
+            name={getConversationName(conversation)}
+            avatar={getConversationAvatar(conversation)}
+            type={conversation.type}
+            lastMessage={lastMessage}
+            memberCount={conversation.members?.length || 0}
+          />
+        );
+      })}
       
       {/* Empty State */}
       {conversations.length === 0 && (

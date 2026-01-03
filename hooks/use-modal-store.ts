@@ -20,7 +20,9 @@ export type ModalType =
   | "deleteMessage"
   | "createDirectMessage"
   | "setStatus"
-  | "createGroup";
+  | "createGroup"
+  | "editGroup"
+  | "viewImage";
 
 type ModalData = {
   server?: Server;
@@ -32,6 +34,20 @@ type ModalData = {
   callData?: any;
   currentMember?: any;
   currentProfile?: any;
+  imageUrl?: string;
+  imageName?: string;
+  sender?: {
+    name?: string;
+    globalName?: string;
+    imageUrl?: string;
+    _id?: string;
+  };
+  timestamp?: string;
+  messageId?: string;
+  messageType?: "messages" | "directMessages";
+  channelId?: string;
+  conversationId?: string;
+  conversation?: any;
 };
 
 type ModalStore = {

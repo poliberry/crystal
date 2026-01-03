@@ -15,17 +15,22 @@ import {
 } from "@/components/ui/dialog";
 import { useModal } from "@/hooks/use-modal-store";
 import { Avatar, AvatarImage } from "../ui/avatar";
-import { useSocket } from "../providers/socket-provider";
 import { useLiveKit } from "../providers/media-room-provider";
 import { shouldReceiveCallAlerts } from "@/hooks/use-dnd-status";
-import { useUser } from "@clerk/nextjs";
+import { useAuthStore } from "@/lib/auth-store";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerTitle,
+} from "../ui/drawer";
 
 export const DMCallModal = () => {
   const { isOpen, onClose, type, data } = useModal();
   const router = useRouter();
-  const { socket } = useSocket();
   const { joinConversation } = useLiveKit();
-  const { user } = useUser();
+  const { user } = useAuthStore();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -37,13 +42,17 @@ export const DMCallModal = () => {
   useEffect(() => {
     if (isModalOpen) {
       // Check if user should receive call alerts (including ringtone)
-      const userStatus = user?.publicMetadata?.presence as string || localStorage.getItem("user-presence-status");
-      
-      if (shouldReceiveCallAlerts(userStatus)) {
+      const statusFromStorage = localStorage.getItem("user-presence-status");
+      const userStatus = user?.status || statusFromStorage;
+
+      // shouldReceiveCallAlerts expects an object with status property
+      const statusObj = userStatus ? { status: userStatus } : null;
+
+      if (shouldReceiveCallAlerts(statusObj)) {
         // Create audio element
-        audioRef.current = new Audio("/sounds/incoming-call.ogg"); // Add your sound file to public/sounds/
-        audioRef.current.loop = true; // Loop the sound
-        audioRef.current.volume = 0.7; // Set volume (0-1)
+        audioRef.current = new Audio("/sounds/incoming-call.ogg");
+        audioRef.current.loop = true;
+        audioRef.current.volume = 0.7;
 
         // Play the sound
         audioRef.current.play().catch((error) => {
@@ -59,7 +68,7 @@ export const DMCallModal = () => {
         audioRef.current.currentTime = 0;
       }
     };
-  }, [isModalOpen, user?.publicMetadata?.presence]);
+  }, [isModalOpen, user?.status]);
 
   const handleAccept = async () => {
     try {
@@ -70,20 +79,12 @@ export const DMCallModal = () => {
         audioRef.current.currentTime = 0;
       }
 
-      // Emit call accepted event
-      if (socket && callData) {
-        socket.emit("call:accepted", {
-          conversationId: callData.conversationId,
-          type: callData.type,
-        });
-      }
-
       onClose();
 
       // Join the LiveKit room directly
       if (callData) {
         const isVideo = callData.type === "video";
-        
+
         // Join the conversation call
         await joinConversation(
           callData.conversationId,
@@ -101,7 +102,9 @@ export const DMCallModal = () => {
     } finally {
       setIsLoading(false);
     }
-  };  const handleDecline = async () => {
+  };
+
+  const handleDecline = async () => {
     try {
       setIsLoading(true);
 
@@ -109,14 +112,6 @@ export const DMCallModal = () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
-      }
-
-      // Emit call declined event to disconnect all users from the room
-      if (socket && callData) {
-        socket.emit("call:declined", {
-          conversationId: callData.conversationId,
-          type: callData.type,
-        });
       }
 
       onClose();
@@ -127,40 +122,54 @@ export const DMCallModal = () => {
     }
   };
 
+  // Don't render if no call data
+  if (!callData || !callData.caller) {
+    return null;
+  }
+
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleDecline}>
-      <DialogContent className="p-0 flex flex-col justify-center overflow-hidden">
-        <div className="flex flex-col w-full h-64 items-center justify-center">
-          <Avatar className="w-20 h-20 mb-4 animate-pulse">
-            <AvatarImage src={callData?.caller.avatar} />
+    <Drawer open={isModalOpen} onOpenChange={handleDecline}>
+      <DrawerContent className="p-0 flex flex-col justify-center overflow-hidden w-1/2 mx-auto border-border border-1">
+        <div className="flex flex-col w-full h-64 items-center justify-center px-6">
+          <Avatar className="w-20 h-20 mb-4 animate-pulse ring-2 ring-primary">
+            <AvatarImage
+              src={callData.caller.avatar || "/logo.png"}
+              alt={callData.caller.name}
+            />
           </Avatar>
-          <DialogTitle className="text-lg font-semibold">
-            {callData?.type === "video" ? "Video call" : "Voice call"} from {callData?.caller.name}
-          </DialogTitle>
+          <DrawerTitle className="text-lg font-semibold text-center">
+            {callData.type === "video" ? "Video call" : "Voice call"} from{" "}
+            <span className="text-primary">
+              {callData.caller.name || "Unknown"}
+            </span>
+          </DrawerTitle>
+          {callData.conversationName && (
+            <DrawerDescription className="text-sm text-muted-foreground mt-2">
+              {callData.conversationName}
+            </DrawerDescription>
+          )}
         </div>
-        <DialogFooter className="px-6 py-4">
-          <div className="flex items-center justify-between gap-2 w-full">
-            <Button
-              disabled={isLoading}
-              aria-disabled={isLoading}
-              onClick={handleDecline}
-              variant="destructive"
-              className="w-full"
-            >
-              Decline
-            </Button>
-            <Button
-              disabled={isLoading}
-              aria-disabled={isLoading}
-              onClick={handleAccept}
-              variant="primary"
-              className="bg-green-600 hover:bg-green-700 w-full"
-            >
-              Accept
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <DrawerFooter className="px-6 py-4 border-t border-border flex flex-row gap-2 items-center justify-center">
+          <Button
+            disabled={isLoading}
+            aria-disabled={isLoading}
+            onClick={handleDecline}
+            variant="destructive"
+            className="w-fit"
+          >
+            Decline
+          </Button>
+          <Button
+            disabled={isLoading}
+            aria-disabled={isLoading}
+            onClick={handleAccept}
+            variant="default"
+            className="w-fit"
+          >
+            Accept
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

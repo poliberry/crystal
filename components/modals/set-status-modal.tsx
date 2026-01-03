@@ -1,28 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useModal } from "@/hooks/use-modal-store";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { useUser } from "@clerk/nextjs";
+import { useAuthStore } from "@/lib/auth-store";
 import { Check, X } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export const SetStatusModal = () => {
   const { isOpen, onClose, type } = useModal();
-  const { user } = useUser();
+  const { user } = useAuthStore();
   const [selectedPresence, setSelectedPresence] = useState<"ONLINE" | "IDLE" | "DND">("ONLINE");
   const [customStatus, setCustomStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get current profile to pre-populate status
+  const currentProfile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+
+  // Convex mutations
+  const updateStatusMutation = useMutation(api.profiles.updateStatus);
+  const updatePresenceStatusMutation = useMutation(api.profiles.updatePresenceStatus);
+
+  // Pre-populate form when modal opens and profile loads
+  useEffect(() => {
+    if (isOpen && type === "setStatus" && currentProfile) {
+      // Set the current status (default to ONLINE if not set)
+      if (currentProfile.status && ["ONLINE", "IDLE", "DND"].includes(currentProfile.status)) {
+        setSelectedPresence(currentProfile.status as "ONLINE" | "IDLE" | "DND");
+      }
+      // Pre-populate custom status if it exists
+      if (currentProfile.presenceStatus) {
+        setCustomStatus(currentProfile.presenceStatus);
+      } else {
+        setCustomStatus("");
+      }
+    }
+  }, [isOpen, type, currentProfile]);
 
   const isModalOpen = isOpen && type === "setStatus";
 
@@ -34,35 +62,20 @@ export const SetStatusModal = () => {
   };
 
   const handleSetStatus = async () => {
+    if (!user?.userId) return;
+    
     setIsLoading(true);
     try {
-      // Update presence status
-      await fetch("/api/socket/user-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: selectedPresence }),
+      // Update presence status (ONLINE/IDLE/DND)
+      await updateStatusMutation({
+        status: selectedPresence,
+        userId: user.userId,
       });
 
-      // Update custom status via socket if provided
-      if (customStatus.trim()) {
-        await fetch("/api/socket/presence-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ presenceStatus: customStatus.trim() }),
-        });
-      } else {
-        // Clear custom status if empty
-        await fetch("/api/socket/presence-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ presenceStatus: null }),
-        });
-      }
-
-      // Trigger members list update via websocket
-      await fetch("/api/socket/poll-members", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      // Update custom status (supports emojis)
+      await updatePresenceStatusMutation({
+        presenceStatus: customStatus.trim() || null,
+        userId: user.userId,
       });
 
       onClose();
@@ -74,18 +87,14 @@ export const SetStatusModal = () => {
   };
 
   const handleClearStatus = async () => {
+    if (!user?.userId) return;
+    
     setIsLoading(true);
     try {
-      await fetch("/api/socket/presence-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ presenceStatus: null }),
-      });
-      
-      // Trigger members list update via websocket
-      await fetch("/api/socket/poll-members", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      // Clear custom status
+      await updatePresenceStatusMutation({
+        presenceStatus: null,
+        userId: user.userId,
       });
       
       setCustomStatus("");
@@ -104,16 +113,16 @@ export const SetStatusModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-white dark:bg-black text-black dark:text-white p-0 overflow-hidden rounded-none">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className={`text-2xl text-left font-bold hubot-sans`}>
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className={`text-2xl text-left font-bold hubot-sans`}>
             Set your status
-          </DialogTitle>
-          <DialogDescription className="hubot-sans text-left text-zinc-500 dark:text-zinc-400">
+          </DrawerTitle>
+          <DrawerDescription className="hubot-sans text-left text-zinc-500 dark:text-zinc-400">
             Let others know what you're up to
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
         <div className="px-6 pb-6 space-y-6">
           {/* Presence Status Selection */}
@@ -153,18 +162,18 @@ export const SetStatusModal = () => {
               id="custom-status"
               value={customStatus}
               onChange={(e) => setCustomStatus(e.target.value)}
-              placeholder="What's happening?"
+              placeholder="What's happening? 😊"
               className="bg-zinc-300/50 dark:bg-zinc-700/75 border-0 focus-visible:ring-0 text-black dark:text-white focus-visible:ring-offset-0"
               maxLength={100}
               disabled={isLoading}
             />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {customStatus.length}/100 characters
+              {customStatus.length}/100 characters • Emojis are supported 😄
             </p>
           </div>
         </div>
 
-        <DialogFooter className="bg-gray-100 dark:bg-[#2B2D31] px-2 py-2 rounded-sm m-2">
+        <DrawerFooter>
           <div className="flex items-center justify-between w-full">
             <Button
               variant="ghost"
@@ -183,7 +192,7 @@ export const SetStatusModal = () => {
                 Cancel
               </Button>
               <Button
-                variant="primary"
+                variant="default"
                 onClick={handleSetStatus}
                 disabled={isLoading}
                 className="bg-green-600 hover:bg-green-700 rounded-sm"
@@ -192,8 +201,8 @@ export const SetStatusModal = () => {
               </Button>
             </div>
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

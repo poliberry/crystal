@@ -1,8 +1,10 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
+import { useQuery, useMutation, useAction } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -67,6 +69,14 @@ export const LiveKitProvider = ({
   const [serverId, setServerId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
 
+  const { user } = useAuthStore();
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+
+  const getToken = useAction(api.livekit.getToken);
+
   const join = async (
     roomId: string,
     roomName: string,
@@ -80,46 +90,39 @@ export const LiveKitProvider = ({
     const call_connecting = new Audio("/sounds/call-connecting.ogg");
     const call_connected = new Audio("/sounds/call-connect.ogg");
 
-    const user = await fetch("/api/profile").then((res) => res.json());
+    if (!profile || !user) return;
 
-    if (!user) return;
-
-    let name = user.globalName ?? user.name;
+    let name = profile.globalName ?? profile.name;
 
     try {
       call_connecting.loop = true;
       call_connecting.play();
-      const res = await fetch(
-        `/api/livekit?room=${roomId}&username=${name}&avatar=${user.imageUrl}`
-      );
-     const data = await res.json();
+      
+      // Use Convex action to get token
+      const data = await getToken({
+        room: roomId,
+        username: name,
+        avatar: profile.imageUrl,
+        userId: user.userId,
+      });
 
-      await Promise.all([
-      setToken(data.token),
-      setRoom(roomId),
-      setRoomName(roomName),
-      setServerName(serverName),
-      setRoomId(roomId),
-      setServerId(serverId),
-      setConversationId(conversationId || null),
-      setRoomType(roomType),
-      setAudio(audio),
-      setVideo(video),
-      setConnected(true),
-      await fetch("/api/socket/room", {
-        method: "POST",
-      }),
-      await fetch('/api/socket/room/connect', {
-        method: "POST",
-        body: JSON.stringify({
-          roomId: roomName,
-          user: user.id
-        }),
-      })
-    ]).then(() => {
+      setToken(data.token);
+      setRoom(roomId);
+      setRoomName(roomName);
+      setServerName(serverName);
+      setRoomId(roomId);
+      setServerId(serverId);
+      setConversationId(conversationId || null);
+      setRoomType(roomType);
+      setAudio(audio);
+      setVideo(video);
+      setConnected(true);
+      
+      // Real-time updates handled by Convex
       call_connecting.pause();
       call_connected.play();
-    });
+      call_connecting.pause();
+      call_connected.play();
     } catch (err) {
       console.error("Failed to join LiveKit room", err);
     }
@@ -145,9 +148,7 @@ export const LiveKitProvider = ({
   };
 
   const leave = async () => {
-    await fetch("/api/socket/room", {
-      method: "POST",
-    });
+    // Real-time updates handled by Convex
     setConnected(false);
     setRoom(null);
     setToken("");

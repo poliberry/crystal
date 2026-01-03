@@ -1,10 +1,4 @@
 import {
-  ChannelType,
-  type Channel,
-  MemberRole,
-  type Server,
-} from "@prisma/client";
-import {
   Edit,
   Hash,
   Lock,
@@ -16,13 +10,12 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useAuthStore } from "@/lib/auth-store";
 
 import { ActionTooltip } from "@/components/action-tooltip";
 import { type ModalType, useModal } from "@/hooks/use-modal-store";
 import { cn } from "@/lib/utils";
 import { useLiveKit } from "../providers/media-room-provider";
-import { currentProfile } from "@/lib/current-profile";
-import { currentUser, useUser } from "@clerk/nextjs";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -35,24 +28,19 @@ import {
   useRemoteParticipants,
   useRoomContext,
 } from "@livekit/components-react";
-import { Avatar } from "@radix-ui/react-avatar";
-import { AvatarImage } from "../ui/avatar";
 import { useEffect, useState } from "react";
-import { SwitchVoiceChannelModal } from "../modals/switch-voice-channel-modal";
-import { useSocket } from "../providers/socket-provider";
-import { NotificationBadge } from "../notification-badge";
 import { UnreadDot } from "../unread-dot";
 
 type ServerChannelProps = {
-  channel: Channel;
-  server: Server;
-  role?: MemberRole;
+  channel: any;
+  server: any;
+  role?: string;
 };
 
 const iconMap = {
-  [ChannelType.TEXT]: Hash,
-  [ChannelType.AUDIO]: Mic,
-  [ChannelType.VIDEO]: Video,
+  ["TEXT" as string]: Hash,
+  ["AUDIO" as string]: Mic,
+  ["VIDEO" as string]: Video,
 };
 
 export const ServerChannel = ({
@@ -63,11 +51,11 @@ export const ServerChannel = ({
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
-  const { user } = useUser();
+  const { user } = useAuthStore();
   const media = useLiveKit();
-  const { socket } = useSocket();
   const [users, setUsers] = useState<any[]>([]);
 
+  // Get connected users from LiveKit API route (not socket)
   const getConnectedUsers = async () => {
     const res = await fetch(`/api/rooms?room=${channel.id}`);
     const data = await res.json();
@@ -75,15 +63,15 @@ export const ServerChannel = ({
   };
 
   useEffect(() => {
-    if (channel.type === ChannelType.AUDIO) {
+    if (channel.type === "AUDIO") {
       getConnectedUsers();
-    }
-
-    socket.on("room:update", (payload: boolean) => {
-      if (payload === true) {
+      // Poll for updates instead of socket events
+      const interval = setInterval(() => {
         getConnectedUsers();
-      }
-    });
+      }, 5000); // Poll every 5 seconds
+
+      return () => clearInterval(interval);
+    }
   }, [channel.id, channel.type]);
 
   const { attributes, listeners, setNodeRef, transform, transition } =
@@ -99,7 +87,7 @@ export const ServerChannel = ({
   const Icon = iconMap[channel.type];
 
   const onClick = async () => {
-    if (channel.type === ChannelType.AUDIO) {
+    if (channel.type === "AUDIO") {
       if (!media.connected) {
         media?.join(
           channel.id,
@@ -141,24 +129,24 @@ export const ServerChannel = ({
         >
           <div
             className={cn(
-              "group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition mb-1",
+              "group px-1.5 py-1 flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition mb-1",
               params?.channelId === channel.id &&
                 "bg-zinc-700/20 dark:bg-zinc-700"
             )}
           >
             {/* Drag handle */}
-            {role !== MemberRole.GUEST && (
+            {role !== "GUEST" && (
               <span
-              {...listeners}
-              onClick={(e) => e.stopPropagation()} // Prevent drag handle click from navigating
-              className="cursor-grab group-hover:block hidden active:cursor-grabbing mr-0.5"
-              tabIndex={1}
-              aria-label="Drag to reorder"
-            >
-              <GripVertical className="w-3 h-3 text-zinc-400 opacity-0 group-hover:opacity-100" />
-            </span>
+                {...listeners}
+                onClick={(e) => e.stopPropagation()}
+                className="cursor-grab group-hover:block hidden active:cursor-grabbing mr-0.5"
+                tabIndex={1}
+                aria-label="Drag to reorder"
+              >
+                <GripVertical className="w-3 h-3 text-zinc-400 opacity-0 group-hover:opacity-100" />
+              </span>
             )}
-            {channel.type === ChannelType.TEXT && (
+            {channel.type === "TEXT" && (
               <UnreadDot channelId={channel.id} />
             )}
             <Icon className="flex-shrink-0 w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -177,10 +165,10 @@ export const ServerChannel = ({
                 </div>
               </div>
               {media.connected &&
-                channel.type === ChannelType.AUDIO &&
+                channel.type === "AUDIO" &&
                 media.roomName === channel.name && <ConnectedUsers />}
               {media.connected &&
-                channel.type === ChannelType.AUDIO &&
+                channel.type === "AUDIO" &&
                 media.roomName !== channel.name &&
                 users.length > 0 && (
                   <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground px-2 pb-2">
@@ -205,7 +193,7 @@ export const ServerChannel = ({
                   </div>
                 )}
               {!media.connected &&
-                channel.type === ChannelType.AUDIO &&
+                channel.type === "AUDIO" &&
                 users.length > 0 && (
                   <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground px-2 pb-2">
                     {users.map((user) => {
@@ -230,7 +218,7 @@ export const ServerChannel = ({
                 )}
             </div>
 
-            {role !== MemberRole.GUEST && (
+            {role !== "GUEST" && (
               <div className="ml-auto flex items-center gap-x-2">
                 <ActionTooltip label="Edit">
                   <Edit

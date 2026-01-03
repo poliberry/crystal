@@ -3,15 +3,21 @@
 import { useForm, FormProvider, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import axios from "axios";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { UploadButton, uploadFiles } from "@/lib/uploadthing";
+import { uploadFiles } from "@/lib/uploadthing";
 import Image from "next/image";
-import { X, FileIcon, Plus, Send } from "lucide-react";
-import { useRef, useState } from "react";
+import { X, FileIcon, Plus, Send, Loader2 } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
 import clsx from "clsx";
 import { EmojiPicker } from "../emoji-picker";
+import { Card } from "../ui/card";
+import { toast } from "sonner";
+import { Id } from "@/convex/_generated/dataModel";
+import axios from "axios";
 
 const formSchema = z.object({
   content: z.string().optional(),
@@ -35,6 +41,38 @@ type ChatInputProps = {
 
 export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const { user } = useAuthStore();
+  const channel = useQuery(
+    api.channels.getById,
+    type === "channel" && query.channelId
+      ? { channelId: query.channelId as Id<"channels"> }
+      : "skip"
+  );
+  const server = useQuery(
+    api.servers.getById,
+    channel?.serverId
+      ? { serverId: channel.serverId as Id<"servers"> }
+      : "skip"
+  );
+  const category = useQuery(
+    api.categories.getById,
+    channel?.categoryId
+      ? { categoryId: channel.categoryId as Id<"categories"> }
+      : "skip"
+  );
+  const conversation = useQuery(
+    api.conversations.getById,
+    type === "conversation" && query.conversationId && user?.userId
+      ? { conversationId: query.conversationId as Id<"conversations">, userId: user.userId }
+      : "skip"
+  );
+  const createMessage = useMutation(api.messages.create);
+  const createDirectMessage = useMutation(api.directMessages.create);
+  const setTyping = useMutation(api.typingIndicators.setTyping);
+  const clearTyping = useMutation(api.typingIndicators.clearTyping);
+
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const methods = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -55,6 +93,97 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
 
   const fileUrls = watch("attachments") || [];
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const content = watch("content") || "";
+
+  // Handle typing indicator
+  useEffect(() => {
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // If user is typing, set typing indicator
+    if (content.trim().length > 0) {
+      const setTypingIndicator = async () => {
+        try {
+          if (type === "conversation" && query.conversationId) {
+            await setTyping({
+              conversationId: query.conversationId as any,
+              userId: user?.userId,
+            });
+          } else if (type === "channel" && query.channelId) {
+            await setTyping({
+              channelId: query.channelId as any,
+              userId: user?.userId,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to set typing indicator:", err);
+        }
+      };
+
+      setTypingIndicator();
+
+      // Clear typing indicator after 3 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(async () => {
+        try {
+          if (type === "conversation" && query.conversationId) {
+            await clearTyping({
+              conversationId: query.conversationId as any,
+              userId: user?.userId,
+            });
+          } else if (type === "channel" && query.channelId) {
+            await clearTyping({
+              channelId: query.channelId as any,
+              userId: user?.userId,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to clear typing indicator:", err);
+        }
+      }, 3000);
+    } else {
+      // If content is empty, clear typing indicator immediately
+      const clearTypingIndicator = async () => {
+        try {
+          if (type === "conversation" && query.conversationId) {
+            await clearTyping({
+              conversationId: query.conversationId as any,
+              userId: user?.userId,
+            });
+          } else if (type === "channel" && query.channelId) {
+            await clearTyping({
+              channelId: query.channelId as any,
+              userId: user?.userId,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to clear typing indicator:", err);
+        }
+      };
+
+      clearTypingIndicator();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      // Clear typing indicator on unmount
+      if (type === "conversation" && query.conversationId) {
+        clearTyping({
+          conversationId: query.conversationId as any,
+          userId: user?.userId,
+        }).catch(() => {});
+      } else if (type === "channel" && query.channelId) {
+        clearTyping({
+          channelId: query.channelId as any,
+          userId: user?.userId,
+        }).catch(() => {});
+      }
+    };
+  }, [content, type, query, user?.userId, setTyping, clearTyping]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (
@@ -62,18 +191,86 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
       (!values.attachments || values.attachments.length === 0)
     )
       return;
+
+    // Clear typing indicator when sending message
+    try {
+      if (type === "conversation" && query.conversationId) {
+        await clearTyping({
+          conversationId: query.conversationId as any,
+          userId: user?.userId,
+        });
+      } else if (type === "channel" && query.channelId) {
+        await clearTyping({
+          channelId: query.channelId as any,
+          userId: user?.userId,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to clear typing indicator:", err);
+    }
+
+    // Clear typing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
     try {
       if (type === "conversation") {
-        await axios.post(
-          `${apiUrl}?conversationId=${query.conversationId}`,
-          values
-        );
+        if (values.content && values.content.length > 255) {
+          toast.warning("Message must be less than 255 characters");
+          return;
+        }
+
+        await createDirectMessage({
+          content: values.content || "",
+          conversationId: query.conversationId as any,
+          userId: user?.userId,
+          attachments: values.attachments?.map((att) => ({
+            utId: att.utId,
+            name: att.name,
+            url: att.url,
+          })),
+        });
+
+        if(conversation?.type === "GROUP_MESSAGE") {
+          await axios.post("/api/notifications/new-group-message", {
+            redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/conversations/${query.conversationId}`,
+            title: `${user?.globalName} (${conversation?.name})`,
+            body: values.content || "",
+            imageUrl: conversation?.imageUrl || user?.imageUrl,
+            conversationId: query.conversationId,
+          });
+        } else {
+          await axios.post("/api/notifications/new-direct-message", {
+            redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/conversations/${query.conversationId}`,
+            title: `${user?.globalName}`,
+            body: values.content || "",
+            imageUrl: user?.imageUrl,
+            subscriberId: conversation?.members[0]?.profile?.userId,
+          });
+        }
+
         reset();
       } else {
-        await axios.post(
-          `${apiUrl}?serverId=${query.serverId}&channelId=${query.channelId}`,
-          values
-        );
+        await createMessage({
+          content: values.content || "",
+          channelId: query.channelId as any,
+          userId: user?.userId,
+          attachments: values.attachments?.map((att) => ({
+            utId: att.utId,
+            name: att.name,
+            url: att.url,
+          })),
+        });
+        await axios.post("/api/notifications/new-message", {
+          redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/servers/${server?._id}/channels/${channel?._id}`,
+          title: `${user?.globalName} (${channel?.name} / ${category?.name}) in ${server?.name}`,
+          body: values.content || "",
+          imageUrl: user?.imageUrl,
+          serverId: server?._id,
+        });
+
         reset();
       }
     } catch (err) {
@@ -86,24 +283,78 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
     setIsDragging(false);
 
     const droppedFiles = Array.from(e.dataTransfer.files);
+    
+    if (droppedFiles.length === 0) return;
 
+    setIsUploading(true);
     try {
       const uploaded = await uploadFiles("messageFile", {
         files: droppedFiles,
       });
 
-      const newAttachments = uploaded.map((file) => ({
-        url: file.url,
-        name: file.name,
-        utId: file.key,
-      }));
+      if (uploaded && Array.isArray(uploaded) && uploaded.length > 0) {
+        const newAttachments = uploaded.map((file) => ({
+          url: file.url,
+          name: file.name,
+          utId: file.key || file.name,
+        }));
 
-      setValue("attachments", [...fileUrls, ...newAttachments]);
-      // Optionally, emit a socket event here to notify other users of the new upload
-      // Example:
-      // socket.emit("newAttachment", { attachments: newAttachments, channelId: query.channelId });
-    } catch (err) {
+        setValue("attachments", [...fileUrls, ...newAttachments]);
+        toast.success(`Uploaded ${newAttachments.length} file(s)`);
+      } else {
+        toast.error("Upload failed: No files were uploaded");
+      }
+    } catch (err: any) {
       console.error("Upload failed:", err);
+      toast.error(`Upload failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    const filesArray = Array.from(selectedFiles);
+
+    setIsUploading(true);
+    try {
+      const uploaded = await uploadFiles("messageFile", {
+        files: filesArray,
+      });
+
+      if (uploaded && Array.isArray(uploaded) && uploaded.length > 0) {
+        const newAttachments = uploaded.map((file) => ({
+          url: file.url,
+          name: file.name,
+          utId: file.key || file.name,
+        }));
+
+        setValue("attachments", [...fileUrls, ...newAttachments]);
+        toast.success(`Uploaded ${newAttachments.length} file(s)`);
+      } else {
+        toast.error("Upload failed: No files were uploaded");
+      }
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      toast.error(`Upload failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setIsUploading(false);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleFileButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    } else {
+      console.error("File input ref is not set");
     }
   };
 
@@ -144,7 +395,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
                 return (
                   <div
                     key={att.url}
-                    className="relative flex flex-col items-center p-2 rounded-md bg-zinc-100 dark:bg-zinc-900 shadow"
+                    className="relative flex flex-col items-center p-2 w-fit bg-zinc-100 dark:bg-zinc-900 shadow"
                   >
                     {isPdf ? (
                       <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400 mb-1" />
@@ -179,66 +430,50 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
           )}
 
           {/* Input with upload and send buttons inside */}
-          <div className="relative flex items-center bg-background shadow-md p-1 rounded-xl">
-            {/* Upload button inside input, left side */}
-            <div className="absolute left-2 top-1/2 -translate-y-1/2">
-              <UploadButton
-                endpoint="messageFile"
-                onClientUploadComplete={(res) => {
-                  if (res && res.length > 0) {
-                    setValue("attachments", [
-                      ...fileUrls,
-                      {
-                        url: res[0].url,
-                        name: res[0].name,
-                        utId: res[0].key,
-                      },
-                    ]);
-                  }
-                }}
-                onUploadError={(error) => {
-                  console.error("Upload Error:", error);
-                }}
-                appearance={{
-                  button:
-                    "p-1 h-8 w-8 bg-transparent hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-full shadow-none",
-                  allowedContent: "hidden",
-                }}
-                content={{
-                  button({ ready }) {
-                    return <Plus className="h-6 w-6 text-zinc-500" />;
-                  },
-                }}
-              />
-            </div>
-            {/* Send button inside input, right side */}
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <Button
-                type="submit"
-                variant="ghost"
-                disabled={isSubmitting}
-                size="icon"
-                className="p-2"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-            <Controller
-              control={control}
-              name="content"
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  placeholder={`Message ${
-                    type === "channel" ? `#${name}` : name
-                  }`}
-                  disabled={isSubmitting}
-                  className="flex-1 pl-12 pr-12 bg-transparent border-none focus:ring-0 focus:border-transparent"
-                  autoComplete="off"
-                />
-              )}
+          <Card className="flex flex-row items-center shadow-md p-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={handleFileSelect}
+              id="file-upload-input"
             />
-          </div>
+            <label htmlFor="file-upload-input" className="cursor-pointer">
+              <Button
+                variant="ghost"
+                className="rounded-none"
+                size="icon"
+                type="button"
+                onClick={handleFileButtonClick}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <Loader2 className="h-6 w-6 rounded-none text-zinc-500 animate-spin" />
+                ) : (
+                  <Plus className="h-6 w-6 rounded-none text-zinc-500" />
+                )}
+              </Button>
+            </label>
+            <Input
+              value={content}
+              onChange={(e) => setValue("content", e.target.value)}
+              placeholder={`Message ${type === "channel" ? `#${name}` : name}`}
+              disabled={isSubmitting}
+              className="flex-1 pr-4 bg-transparent border-none focus:ring-0 focus:border-transparent"
+              autoComplete="off"
+            />
+            <Button
+              type="submit"
+              variant="default"
+              disabled={isSubmitting}
+              size="icon"
+              className="p-2"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </Card>
         </form>
       </div>
     </FormProvider>

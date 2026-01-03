@@ -32,7 +32,7 @@ import { FloatingCallCard } from "./call-ui";
 import { useLiveKit } from "./providers/media-room-provider";
 import { cn } from "@/lib/utils";
 import { Track } from "livekit-client";
-import { Channel, Conversation, Profile, Server, ConversationType } from "@prisma/client";
+import { Channel, Conversation, Profile, Server, ConversationType } from "@/types/conversation";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { roomService } from "@/lib/livekit-room-service";
 import { ActionTooltip } from "./action-tooltip";
@@ -47,7 +47,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
-import { useSocket } from "./providers/socket-provider";
 
 type MediaRoomProps = {
   conversation: Conversation;
@@ -56,7 +55,6 @@ type MediaRoomProps = {
 
 export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
   const livekit = useLiveKit();
-  const { socket } = useSocket();
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
   const [activeParticipant, setActiveParticipant] = useState<any>(null);
   const [activeScreenShare, setActiveScreenShare] = useState<any>(null);
@@ -81,16 +79,6 @@ export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
       setOutputDevices(devices.filter((d) => d.kind === "audiooutput"));
       setCameraDevices(devices.filter((d) => d.kind === "videoinput"));
     });
-
-    const updateUserInfo = (name: string) => {
-      localParticipant.setName(name);
-    };
-
-    socket.on("room:update-profile", updateUserInfo);
-
-    return () => {
-      socket.off("room:update-profile", updateUserInfo);
-    };
   }, []);
 
   const handleSelectInput = async (deviceId: string) => {
@@ -181,11 +169,15 @@ export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
       } catch (err) {
         // If desktop picker fails, fall back to browser getDisplayMedia
         console.warn('Desktop picker failed, falling back to browser getDisplayMedia', err);
-        await localParticipant.setScreenShareEnabled(true);
+        await localParticipant.setScreenShareEnabled(true, {
+          audio: true
+        });
       }
     } else {
-      // Not in Electron - use browser's getDisplayMedia
-      await localParticipant.setScreenShareEnabled(true);
+      // Not in Electron - use browser's getDisplayMedia with system audio
+      await localParticipant.setScreenShareEnabled(true, {
+        audio: true
+      });
     }
   };
 

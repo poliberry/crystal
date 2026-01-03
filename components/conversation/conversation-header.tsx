@@ -6,6 +6,9 @@ import { ActionTooltip } from "@/components/action-tooltip";
 import { useModal } from "@/hooks/use-modal-store";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { IconShoppingBag, IconUsersGroup } from "@tabler/icons-react";
+import { Badge } from "../ui/badge";
+import { useRouter } from "next/navigation";
 
 type ConversationHeaderProps = {
   currentProfile: any;
@@ -14,45 +17,31 @@ type ConversationHeaderProps = {
 export const ConversationHeader = ({ currentProfile }: ConversationHeaderProps) => {
   const { onOpen } = useModal();
   const [searchTerm, setSearchTerm] = useState("");
-
+  const router = useRouter();
   return (
     <div className="flex flex-col gap-y-2 px-3 py-2 border-b border-muted">
-      {/* Header with title and action buttons */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Direct Messages</h2>
-        <div className="flex items-center gap-x-1">
-          <ActionTooltip label="Create Group">
-            <Button
-              onClick={() => onOpen("createGroup", { currentProfile })}
-              variant="ghost"
-              size="sm"
-              className="p-2"
-            >
-              <Users className="w-4 h-4" />
-            </Button>
-          </ActionTooltip>
-          <ActionTooltip label="Start DM">
-            <Button
-              onClick={() => onOpen("createDirectMessage", { currentProfile })}
-              variant="ghost"
-              size="sm"
-              className="p-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-            </Button>
-          </ActionTooltip>
-        </div>
-      </div>
-
       {/* Search bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <Search className="absolute left-3 top-2 text-muted-foreground w-4 h-4" />
         <Input
           placeholder="Search conversations..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
         />
+      </div>
+      <div className="flex flex-col items-start w-full gap--2">
+        <Button variant="ghost" onClick={() => router.push("/conversations")} className="p-1.5 w-full justify-start cursor-pointer">
+          <IconUsersGroup className="w-4 h-4" />
+          <span className="text-sm font-semibold">Friends</span>
+        </Button>
+        <Button variant="ghost" disabled className="p-1.5 w-full justify-start cursor-not-allowed">
+          <IconShoppingBag className="w-4 h-4" />
+          <span className="text-sm font-semibold">Marketplace</span>
+          <Badge variant="outline" className="ml-auto">
+            <span className="text-xs font-semibold uppercase">Coming soon</span>
+          </Badge>
+        </Button>
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { cn } from "@/lib/utils";
 import { useLiveKit } from "./providers/media-room-provider";
-import { ConversationType } from "@prisma/client";
+import { ConversationType } from "@/types/conversation";
 
 type CallJoinUIProps = {
   conversationId: string;

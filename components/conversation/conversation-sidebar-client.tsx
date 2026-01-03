@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSocket } from "@/components/providers/socket-provider";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ServerChannelList } from "./server-channel-list";
 import { ConversationHeader } from "./conversation-header";
+import { ActionTooltip } from "../action-tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { Button } from "../ui/button";
+import { useModal } from "@/hooks/use-modal-store";
+import { MessageCircle, Users } from "lucide-react";
 
 interface ConversationSidebarClientProps {
   initialConversations: any[];
@@ -15,48 +21,62 @@ export const ConversationSidebarClient = ({
   initialConversations,
   currentProfile,
 }: ConversationSidebarClientProps) => {
-  const { socket } = useSocket();
-  const [conversations, setConversations] = useState(initialConversations);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { user } = useAuthStore();
+  const { onOpen } = useModal();
+  const conversations = useQuery(
+    api.conversations.getMyConversations,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-  const fetchConversations = async () => {
-    try {
-      setIsRefreshing(true);
-      const response = await fetch('/api/conversations/list');
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(data.conversations || []);
-      }
-    } catch (error) {
-      console.error('Error refreshing conversations:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleConversationsRefresh = () => {
-      console.log('Received conversations refresh event');
-      fetchConversations();
-    };
-
-    socket.on("conversations:refresh", handleConversationsRefresh);
-
-    return () => {
-      socket.off("conversations:refresh", handleConversationsRefresh);
-    };
-  }, [socket]);
+  const displayConversations = conversations || initialConversations;
 
   return (
-    <div className="flex flex-col h-full text-primary w-full bg-transparent border-r border-l border-muted">
+    <div className="flex flex-col h-full text-muted-foreground w-full bg-transparent">
       <ConversationHeader currentProfile={currentProfile} />
-      <ScrollArea className="flex-1 px-3 dark:bg-black bg-white">
+      <ScrollArea className="flex-1 px-3">
+        <div className="flex items-center w-full justify-between mt-2 gap-2">
+          <div className="flex items-center gap-x-1">
+            <h2 className="text-sm font-semibold uppercase">Direct Messages</h2>
+          </div>
+          <div className="flex items-center gap-x-1">
+            <Tooltip>
+              <TooltipTrigger>
+                <Button
+                  onClick={() => onOpen("createGroup", { currentProfile })}
+                  variant="outline"
+                  size="sm"
+                  className="p-2"
+                >
+                  <Users className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Create Group</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger>
+                <Button
+                  onClick={() =>
+                    onOpen("createDirectMessage", { currentProfile })
+                  }
+                  variant="outline"
+                  size="sm"
+                  className="p-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Start DM</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
         <div className="mt-2">
           <div className="mb-2">
             <ServerChannelList
-              conversations={conversations}
+              conversations={displayConversations}
               currentProfile={currentProfile}
             />
           </div>

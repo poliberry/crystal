@@ -1,39 +1,26 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChannelType } from "@prisma/client";
-import axios from "axios";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import qs from "query-string";
+import { useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useModal } from "@/hooks/use-modal-store";
+import { cn } from "@/lib/utils";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { Id } from "@/convex/_generated/dataModel";
 
 const formSchema = z.object({
   name: z
@@ -44,35 +31,38 @@ const formSchema = z.object({
 });
 
 export const CreateCategoryModal = () => {
-  const { isOpen, onClose, type, data } = useModal();
-  const { channelType } = data;
-  const router = useRouter();
+  const { isOpen, onClose, type } = useModal();
   const params = useParams();
+  const { user } = useAuthStore();
+  const createCategory = useMutation(api.categories.create);
 
   const isModalOpen = isOpen && type === "createCategory";
 
-  const form = useForm({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+  } = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
     },
   });
 
-  const isLoading = form.formState.isSubmitting;
+  const isLoading = isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const url = qs.stringifyUrl({
-        url: "/api/categories",
-        query: {
-          serverId: params?.serverId,
-        },
+      if (!params?.serverId || !user?.userId) return;
+
+      await createCategory({
+        name: values.name,
+        serverId: params.serverId as Id<"servers">,
+        userId: user.userId,
       });
 
-      await axios.post(url, values);
-
-      form.reset();
-      router.refresh();
+      reset();
       onClose();
     } catch (error) {
       console.error(error);
@@ -80,64 +70,58 @@ export const CreateCategoryModal = () => {
   };
 
   const handleClose = () => {
-    form.reset();
+    reset();
     onClose();
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Create category
-          </DialogTitle>
-        </DialogHeader>
+          </DrawerTitle>
+        </DrawerHeader>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-8"
-            autoCapitalize="off"
-            autoComplete="off"
-          >
-            <div className="space-y-8 px-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="uppercase text-xs font-bold text-zinc-500">
-                      Category name
-                    </FormLabel>
-
-                    <FormControl>
-                      <Input
-                        disabled={isLoading}
-                        aria-disabled={isLoading}
-                        className="dark:bg-zinc-300/10 bg-zinc-300/50 border-0 dark:text-white text-black"
-                        placeholder="Enter channel name"
-                        {...field}
-                      />
-                    </FormControl>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter className="px-6 py-4">
-              <Button
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-8"
+          autoCapitalize="off"
+          autoComplete="off"
+        >
+          <div className="space-y-8 px-6">
+            <div className="space-y-2">
+              <Label className="uppercase text-xs font-bold text-zinc-500">
+                Category name
+              </Label>
+              <Input
                 disabled={isLoading}
                 aria-disabled={isLoading}
-                variant="primary"
-              >
-                Create
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                className={cn(
+                  "dark:bg-zinc-300/10 bg-zinc-300/50 border-0 dark:text-white text-black",
+                  errors.name && "border-red-500"
+                )}
+                placeholder="Enter category name"
+                {...register("name")}
+              />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name.message}</p>
+              )}
+            </div>
+          </div>
+
+          <DrawerFooter>
+            <Button
+              disabled={isLoading}
+              aria-disabled={isLoading}
+              variant="default"
+              type="submit"
+            >
+              Create
+            </Button>
+          </DrawerFooter>
+        </form>
+      </DrawerContent>
+    </Drawer>
   );
 };

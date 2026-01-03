@@ -6,7 +6,8 @@ import { Providers } from "@/components/providers/providers";
 import { siteConfig } from "@/config";
 import { cn } from "@/lib/utils";
 import "./globals.css";
-import { CustomCssInjector } from "@/components/custom-css-injector";
+import NotificationListener from "@/components/notification-listener";
+import { Toaster } from "@/components/ui/sonner";
 
 // Force dynamic rendering for all pages
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,9 @@ export default function RootLayout({
         )}
       >
         <Providers>
+          <Toaster position="top-center" />
           {children}
+          <NotificationListener />
         </Providers>
       </body>
     </html>

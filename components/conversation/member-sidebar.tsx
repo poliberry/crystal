@@ -1,4 +1,4 @@
-import { ChannelType, MemberRole } from "@prisma/client";
+import { ChannelType, MemberRole } from "@/types/conversation";
 import { Hash, Mic, ShieldAlert, ShieldCheck, Video } from "lucide-react";
 import { redirect } from "next/navigation";
 

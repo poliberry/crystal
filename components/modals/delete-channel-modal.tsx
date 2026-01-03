@@ -1,24 +1,27 @@
 "use client";
 
-import axios from "axios";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import qs from "query-string";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useModal } from "@/hooks/use-modal-store";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const DeleteChannelModal = () => {
   const { isOpen, onClose, type, data } = useModal();
   const router = useRouter();
+  const { user } = useAuthStore();
+  const deleteChannel = useMutation(api.channels.remove);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,14 +32,9 @@ export const DeleteChannelModal = () => {
   const onClick = async () => {
     try {
       setIsLoading(true);
-      const url = qs.stringifyUrl({
-        url: `/api/channels/${channel?.id}`,
-        query: {
-          serverId: server?.id,
-        },
-      });
 
-      await axios.delete(url);
+      const channelId = (channel as any)?._id || (channel as any)?.id;
+      await deleteChannel({ channelId: channelId as any, userId: user?.userId });
 
       onClose();
       router.refresh();
@@ -48,23 +46,23 @@ export const DeleteChannelModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={onClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={onClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Delete Channel
-          </DialogTitle>
+          </DrawerTitle>
 
-          <DialogDescription className="text-center">
+          <DrawerDescription className="text-center">
             Are you sure you want to do this? <br />
             <span className="text-indigo-500 font-semibold">
               #{channel?.name}
             </span>{" "}
             will be permanently deleted.
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
-        <DialogFooter className="bg-gray-100/90 dark:bg-gray-100/10 px-6 py-4">
+        <DrawerFooter>
           <div className="flex items-center justify-between w-full">
             <Button
               disabled={isLoading}
@@ -83,8 +81,8 @@ export const DeleteChannelModal = () => {
               Confirm
             </Button>
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

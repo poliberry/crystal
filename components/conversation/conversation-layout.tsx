@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Profile, ConversationType, Conversation } from "@prisma/client";
+import { ConversationType, Profile, Conversation } from "@/types/conversation";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ChatMessages } from "@/components/chat/chat-messages";
@@ -12,19 +12,12 @@ import { CallJoinUI } from "@/components/call-join-ui";
 import { ConversationRightSidebar } from "@/components/conversation/conversation-right-sidebar";
 
 interface ConversationLayoutProps {
-  conversation: Conversation & {
-    members: Array<{
-      member: {
-        id: string;
-        profile: Profile;
-      };
-    }>;
-  };
+  conversation: any; // Conversation from Convex
   conversationName: string;
   conversationImageUrl: string;
   otherMember: any;
   currentMember: any;
-  currentProfile: Profile;
+  currentProfile: any; // Profile from Convex
 }
 
 export function ConversationLayout({
@@ -46,9 +39,15 @@ export function ConversationLayout({
 
   // Check for active participants in the room
   useEffect(() => {
+    const conversationId = conversation._id || conversation.id;
+    if (!conversationId) {
+      setIsLoading(false);
+      return;
+    }
+
     const checkActiveCall = async () => {
       try {
-        const response = await fetch(`/api/rooms?room=conversation-${conversation.id}`);
+        const response = await fetch(`/api/rooms?room=conversation-${conversationId}`);
         if (response.ok) {
           const participants = await response.json();
           setActiveParticipants(Array.isArray(participants) ? participants : []);
@@ -69,13 +68,13 @@ export function ConversationLayout({
     const interval = setInterval(checkActiveCall, 5000);
     
     return () => clearInterval(interval);
-  }, [conversation.id]);
+  }, [conversation._id, conversation.id]);
 
   // If user is actively in a call and wants expanded view, render the expanded call UI
   if (isInCall && isExpanded) {
     return (
       <ExpandedCallUI
-        conversationId={conversation.id}
+        conversationId={conversation._id || conversation.id}
         conversationName={conversationName}
         conversationType={conversation.type}
         otherMember={otherMember?.profile}
@@ -88,39 +87,45 @@ export function ConversationLayout({
     return (
       <div className="flex h-full">
         {/* Main chat area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col pb-2 bg-background">
           <ChatHeader
             imageUrl={conversationImageUrl}
             name={conversationName}
             caller={{
-              id: currentProfile.id,
+              id: currentProfile._id || currentProfile.id,
               name: currentProfile.globalName || currentProfile.name,
               avatar: currentProfile.imageUrl,
             }}
-            user={otherMember?.profile?.id}
+            user={otherMember?.profile?._id || otherMember?.profile?.id}
             type="conversation"
             conversation={conversation}
             currentProfile={currentProfile}
           />
 
           <CompactCallUI
-            conversationId={conversation.id}
+            conversationId={conversation._id || conversation.id}
             conversationName={conversationName}
             conversationType={conversation.type}
             otherMember={otherMember?.profile}
           />
 
           <ChatMessages
-            member={currentMember}
+            member={currentMember ? {
+              id: currentMember._id || currentMember.id || currentMember.profileId,
+              _id: currentMember._id || currentMember.id || currentMember.profileId,
+              profileId: currentMember.profileId || currentMember._id || currentMember.id,
+              role: currentMember.role || "MEMBER",
+              profile: currentMember.profile || currentProfile,
+            } : currentMember}
             name={conversationName}
-            chatId={conversation.id}
+            chatId={conversation._id || conversation.id}
             type="conversation"
             apiUrl="/api/direct-messages"
             paramKey="conversationId"
-            paramValue={conversation.id}
+            paramValue={conversation._id || conversation.id}
             socketUrl="/api/socket/direct-messages"
             socketQuery={{
-              conversationId: conversation.id,
+              conversationId: conversation._id || conversation.id,
             }}
           />
 
@@ -129,13 +134,13 @@ export function ConversationLayout({
             type="conversation"
             apiUrl="/api/socket/direct-messages"
             query={{
-              conversationId: conversation.id,
+              conversationId: conversation._id || conversation.id,
             }}
           />
         </div>
 
         {/* Right sidebar - only show when not in call */}
-        <aside className="md:flex h-full w-72 flex-col right-0 z-[10]">
+        <aside className="md:flex h-full w-72 flex-col right-0 z-[10] px-4 pb-2">
           <ConversationRightSidebar />
         </aside>
       </div>
@@ -146,16 +151,16 @@ export function ConversationLayout({
   return (
     <div className="flex h-full">
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col mb-2 bg-background">
         <ChatHeader
           imageUrl={conversationImageUrl}
           name={conversationName}
           caller={{
-            id: currentProfile.id,
+            id: currentProfile._id || currentProfile.id,
             name: currentProfile.globalName || currentProfile.name,
             avatar: currentProfile.imageUrl,
           }}
-          user={otherMember?.profile?.id}
+          user={otherMember?.profile?._id || otherMember?.profile?.id}
           type="conversation"
           conversation={conversation}
           currentProfile={currentProfile}
@@ -164,7 +169,7 @@ export function ConversationLayout({
         {/* Show call UI based on state */}
         {hasActiveCall && !isInCall && !isLoading && (
           <CallJoinUI
-            conversationId={conversation.id}
+            conversationId={conversation._id || conversation.id}
             conversationName={conversationName}
             conversationType={conversation.type}
             otherMember={otherMember}
@@ -174,7 +179,7 @@ export function ConversationLayout({
 
         {isInCall && (
           <CompactCallUI
-            conversationId={conversation.id}
+            conversationId={conversation._id || conversation.id}
             conversationName={conversationName}
             conversationType={conversation.type}
             otherMember={otherMember?.profile}
@@ -182,16 +187,22 @@ export function ConversationLayout({
         )}
 
         <ChatMessages
-          member={currentMember}
+          member={currentMember ? {
+            id: currentMember._id || currentMember.id || currentMember.profileId,
+            _id: currentMember._id || currentMember.id || currentMember.profileId,
+            profileId: currentMember.profileId || currentMember._id || currentMember.id,
+            role: currentMember.role || "MEMBER",
+            profile: currentMember.profile || currentProfile,
+          } : currentMember}
           name={conversationName}
-          chatId={conversation.id}
+          chatId={conversation._id || conversation.id}
           type="conversation"
           apiUrl="/api/direct-messages"
           paramKey="conversationId"
-          paramValue={conversation.id}
+          paramValue={conversation._id || conversation.id}
           socketUrl="/api/socket/direct-messages"
           socketQuery={{
-            conversationId: conversation.id,
+            conversationId: conversation._id || conversation.id,
           }}
         />
 
@@ -200,13 +211,13 @@ export function ConversationLayout({
           type="conversation"
           apiUrl="/api/socket/direct-messages"
           query={{
-            conversationId: conversation.id,
+            conversationId: conversation._id || conversation.id,
           }}
         />
       </div>
 
       {/* Right sidebar - only show when not in call */}
-      <aside className="md:flex h-full w-72 flex-col right-0 z-[10]">
+      <aside className="md:flex h-full w-72 flex-col right-0 z-[10] pl-4 mr-4 pb-2">
         <ConversationRightSidebar />
       </aside>
     </div>

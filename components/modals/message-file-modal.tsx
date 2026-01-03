@@ -1,30 +1,24 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import axios from "axios";
-import { useRouter } from "next/navigation";
-import qs from "query-string";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { FileUpload } from "@/components/file-upload";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@/components/ui/form";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useModal } from "@/hooks/use-modal-store";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { Id } from "@/convex/_generated/dataModel";
 
 const formSchema = z.object({
   fileUrl: z.string().min(1, {
@@ -34,39 +28,67 @@ const formSchema = z.object({
 
 export const MessageFileModal = () => {
   const { isOpen, onClose, type, data } = useModal();
-  const router = useRouter();
+  const { user } = useAuthStore();
+  const createMessage = useMutation(api.messages.create);
+  const createDirectMessage = useMutation(api.directMessages.create);
 
   const isModalOpen = isOpen && type === "messageFile";
-  const { apiUrl, query } = data;
+  const { channelId, conversationId } = data;
 
-  const form = useForm({
+  const {
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setValue,
+    watch,
+    reset,
+  } = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       fileUrl: "",
     },
   });
 
+  const fileUrl = watch("fileUrl");
+
   const handleClose = () => {
-    form.reset();
+    reset();
     onClose();
   };
 
-  const isLoading = form.formState.isSubmitting;
+  const isLoading = isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!user?.userId) return;
+    
     try {
-      const url = qs.stringifyUrl({
-        url: apiUrl || "",
-        query,
-      });
+      // Determine if it's a channel message or direct message
+      if (conversationId) {
+        // Direct message
+        await createDirectMessage({
+          content: values.fileUrl,
+          conversationId: conversationId as Id<"conversations">,
+          userId: user.userId,
+          attachments: [{
+            utId: values.fileUrl,
+            name: "File",
+            url: values.fileUrl,
+          }],
+        });
+      } else if (channelId) {
+        // Channel message
+        await createMessage({
+          content: values.fileUrl,
+          channelId: channelId as Id<"channels">,
+          userId: user.userId,
+          attachments: [{
+            utId: values.fileUrl,
+            name: "File",
+            url: values.fileUrl,
+          }],
+        });
+      }
 
-      await axios.post(url, {
-        ...values,
-        content: values.fileUrl,
-      });
-
-      form.reset();
-      router.refresh();
+      reset();
       handleClose();
     } catch (error: unknown) {
       console.error(error);
@@ -74,59 +96,51 @@ export const MessageFileModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 overflow-hidden" hideCloseIcon>
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Add an attachment
-          </DialogTitle>
+          </DrawerTitle>
 
-          <DialogDescription className="text-center text-zinc-500">
+          <DrawerDescription className="text-center text-zinc-500">
             Send a file as a message.
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-8"
-            autoCapitalize="off"
-            autoComplete="off"
-          >
-            <div className="space-y-8 px-6">
-              <div className="flex items-center justify-center text-center">
-                <FormField
-                  control={form.control}
-                  name="fileUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <FileUpload
-                          endpoint="messageFile"
-                          value={field.value}
-                          onChange={field.onChange}
-                        />
-                      </FormControl>
-
-                      <FormMessage />
-                    </FormItem>
-                  )}
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-8"
+          autoCapitalize="off"
+          autoComplete="off"
+        >
+          <div className="space-y-8 px-6">
+            <div className="flex items-center justify-center text-center">
+              <div className="space-y-2">
+                <FileUpload
+                  endpoint="messageFile"
+                  value={fileUrl}
+                  onChange={(value) => setValue("fileUrl", value)}
                 />
+                {errors.fileUrl && (
+                  <p className="text-sm text-red-500">{errors.fileUrl.message}</p>
+                )}
               </div>
             </div>
+          </div>
 
-            <DialogFooter className="px-6 py-4">
-              <Button
-                disabled={isLoading}
-                aria-disabled={isLoading}
-                variant="primary"
-              >
-                Send
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          <DrawerFooter>
+            <Button
+              disabled={isLoading}
+              aria-disabled={isLoading}
+              variant="default"
+              type="submit"
+            >
+              Send
+            </Button>
+          </DrawerFooter>
+        </form>
+      </DrawerContent>
+    </Drawer>
   );
 };

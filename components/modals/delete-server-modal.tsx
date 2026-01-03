@@ -1,23 +1,27 @@
 "use client";
 
-import axios from "axios";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useModal } from "@/hooks/use-modal-store";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const DeleteServerModal = () => {
   const { isOpen, onClose, type, data } = useModal();
   const router = useRouter();
+  const { user } = useAuthStore();
+  const deleteServer = useMutation(api.servers.remove);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,7 +33,8 @@ export const DeleteServerModal = () => {
     try {
       setIsLoading(true);
 
-      await axios.delete(`/api/servers/${server?.id}`);
+      const serverId = (server as any)?._id || (server as any)?.id;
+      await deleteServer({ serverId: serverId as any, userId: user?.userId });
 
       onClose();
       router.refresh();
@@ -42,23 +47,23 @@ export const DeleteServerModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={onClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={onClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Delete Server
-          </DialogTitle>
+          </DrawerTitle>
 
-          <DialogDescription className="text-center">
+          <DrawerDescription className="text-center">
             Are you sure you want to do this? <br />
             <span className="text-indigo-500 font-semibold">
               {server?.name}
             </span>{" "}
             will be permanently deleted.
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
-        <DialogFooter className="bg-gray-100/90 dark:bg-gray-100/10 px-6 py-4">
+        <DrawerFooter>
           <div className="flex items-center justify-between w-full">
             <Button
               disabled={isLoading}
@@ -77,8 +82,8 @@ export const DeleteServerModal = () => {
               Confirm
             </Button>
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };

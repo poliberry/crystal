@@ -1,33 +1,43 @@
+"use client";
+
 import { redirect } from "next/navigation";
-
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { InitialModal } from "@/components/modals/initial-modal";
-import { db } from "@/lib/db";
-import { initialProfile } from "@/lib/initial-profile";
 
-// Force dynamic rendering for this page
+const SetupPage = () => {
+  const { user } = useAuthStore();
+  
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-const SetupPage = async () => {
-  try {
-    const profile = await initialProfile();
+  const servers = useQuery(
+    api.servers.getMyServers,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-    const server = await db.server.findFirst({
-      where: {
-        members: {
-          some: {
-            profileId: profile.id,
-          },
-        },
-      },
-    });
-
-    if (server) redirect(`/servers/${server.id}`);
-
-    return <InitialModal />;
-  } catch (error) {
-    console.error("Setup page error:", error);
-    // Redirect to sign-in if there's an authentication error
-    redirect("/sign-in");
+  if (profile === undefined || servers === undefined) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+      </div>
+    );
   }
+
+  if (!profile) {
+    redirect("/sign-in");
+    return null;
+  }
+
+  if (servers && servers.length > 0) {
+    redirect(`/servers/${servers[0]._id}`);
+    return null;
+  }
+
+  return <InitialModal />;
 };
 
 export default SetupPage;

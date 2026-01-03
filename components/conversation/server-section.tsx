@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChannelType, MemberRole } from "@prisma/client";
+import { type ChannelType, MemberRole } from "@/types/conversation";
 import { Plus, Settings } from "lucide-react";
 
 import { ActionTooltip } from "@/components/action-tooltip";

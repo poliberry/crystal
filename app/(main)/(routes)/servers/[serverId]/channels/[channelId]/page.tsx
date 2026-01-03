@@ -1,131 +1,119 @@
-import { redirectToSignIn } from "@clerk/nextjs";
-import { ChannelType } from "@prisma/client";
-import { redirect } from "next/navigation";
+"use client";
 
+import { redirect } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { use } from "react";
+import { Id } from "@/convex/_generated/dataModel";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ChatMessages } from "@/components/chat/chat-messages";
 import { MediaRoom } from "@/components/media-room";
-import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
-import { FloatingCallCard } from "@/components/call-ui";
-import { GlobalDropzone } from "@/components/chat/global-dropzone";
-import { Metadata } from "next";
-import { metadata } from "@/app/layout";
-import Head from "next/head";
 import { PageContextProvider } from "@/components/providers/page-context-provider";
 import { NewMessagesBanner } from "@/components/new-messages-banner";
 
 type ChannelIdPageProps = {
-  params: {
+  params: Promise<{
     serverId: string;
     channelId: string;
-  };
+  }>;
 };
 
-export async function generateMetadata({
-  params,
-}: ChannelIdPageProps): Promise<Metadata> {
-  const profile = await currentProfile();
+const ChannelIdPage = ({ params }: ChannelIdPageProps) => {
+  const { user } = useAuthStore();
+  const resolvedParams = use(params);
 
-  if (!profile) return redirectToSignIn();
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-  const server = await db.server.findUnique({
-    where: {
-      id: params.serverId,
-    },
-  });
+  const server = useQuery(
+    api.servers.getById,
+    resolvedParams.serverId ? { serverId: resolvedParams.serverId as Id<"servers"> } : "skip"
+  );
 
-  const channel = await db.channel.findUnique({
-    where: {
-      id: params.channelId,
-    },
-  });
+  const channel = server?.channels?.find(
+    (ch: any) => ch._id === resolvedParams.channelId
+  );
 
-  return {
-    title: `${channel?.type !== ChannelType.AUDIO ? "#" : ""}${channel?.name} | ${server?.name} | Crystal`,
-    description: `Chat in ${channel?.name} on ${server?.name}`,
-  };
-}
+  const member = server?.members?.find(
+    (m: any) => m.profileId === profile?._id
+  );
 
-const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
-  const profile = await currentProfile();
+  if (profile === undefined || server === undefined) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
-  if (!profile) return redirectToSignIn();
+  if (!profile) {
+    redirect("/sign-in");
+    return null;
+  }
 
-  const server = await db.server.findUnique({
-    where: {
-      id: params.serverId,
-    },
-  });
-
-  const channel = await db.channel.findUnique({
-    where: {
-      id: params.channelId,
-    },
-  });
-
-  const member = await db.member.findFirst({
-    where: {
-      serverId: params.serverId,
-      profileId: profile.id,
-    },
-  });
-
-  if (!channel || !member || !server) redirect("/");
+  if (!channel || !member || !server) {
+    redirect("/");
+    return null;
+  }
 
   return (
     <PageContextProvider
       serverData={{
-        id: server.id,
+        id: server._id,
         name: server.name,
         imageUrl: server.imageUrl,
       }}
       channelData={{
-        id: channel.id,
+        id: channel._id,
         name: channel.name,
         type: channel.type,
       }}
       currentProfile={profile}
     >
-      <div className="bg-transparent flex flex-col h-full">
-        {channel.type === ChannelType.TEXT && (
+      <div className="bg-transparent flex flex-col h-full w-full min-w-0 max-w-full overflow-hidden">
+        {channel.type === "TEXT" && (
           <ChatHeader
             name={channel.name}
-            serverId={channel.serverId}
+            serverId={server._id}
             type="channel"
           />
         )}
-        {channel.type === ChannelType.TEXT && (
+        {channel.type === "TEXT" && (
           <>
-            <NewMessagesBanner channelId={channel.id} />
+            <NewMessagesBanner channelId={channel._id} />
             <ChatMessages
               name={channel.name}
-              chatId={channel.id}
+              chatId={channel._id}
               member={member}
               type="channel"
               apiUrl="/api/messages"
               socketUrl="/api/socket/messages"
               socketQuery={{
-                channelId: channel.id,
-                serverId: channel.serverId,
+                channelId: channel._id,
+                serverId: server._id,
               }}
               paramKey="channelId"
-              paramValue={channel.id}
+              paramValue={channel._id}
             />
-            <ChatInput
-              name={channel.name}
-              type="channel"
-              apiUrl="/api/socket/messages"
-              query={{
-                channelId: channel.id,
-                serverId: channel.serverId,
-              }}
-            />
+            <div className="flex-shrink-0">
+              <ChatInput
+                name={channel.name}
+                type="channel"
+                apiUrl="/api/socket/messages"
+                query={{
+                  channelId: channel._id,
+                  serverId: server._id,
+                }}
+              />
+            </div>
           </>
         )}
 
-        {channel.type === ChannelType.AUDIO && (
+        {channel.type === "AUDIO" && (
           <>
             <MediaRoom channel={channel} server={server} />
           </>

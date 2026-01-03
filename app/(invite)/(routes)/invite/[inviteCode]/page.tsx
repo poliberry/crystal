@@ -1,8 +1,10 @@
-import { redirectToSignIn } from "@clerk/nextjs";
-import { redirect } from "next/navigation";
+"use client";
 
-import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { useEffect, useState } from "react";
 
 type InviteCodePageProps = {
   params: {
@@ -10,44 +12,81 @@ type InviteCodePageProps = {
   };
 };
 
-const InviteCodePage = async ({ params }: InviteCodePageProps) => {
-  const profile = await currentProfile();
+const InviteCodePage = ({ params }: InviteCodePageProps) => {
+  const { user } = useAuthStore();
+  const joinServer = useMutation(api.servers.joinByInviteCode);
+  const [hasJoined, setHasJoined] = useState(false);
 
-  if (!profile) return redirectToSignIn();
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-  if (!params.inviteCode) redirect("/");
+  const servers = useQuery(
+    api.servers.getMyServers,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-  const existingServer = await db.server.findFirst({
-    where: {
-      inviteCode: params.inviteCode,
-      members: {
-        some: {
-          profileId: profile.id,
-        },
-      },
-    },
-  });
+  useEffect(() => {
+    const handleJoin = async () => {
+      if (!profile || !params.inviteCode || hasJoined) return;
 
-  if (existingServer) redirect(`/servers/${existingServer.id}`);
+      try {
+        // Check if user is already a member
+        const existingServer = servers?.find(
+          (s: any) => s.inviteCode === params.inviteCode
+        );
 
-  const server = await db.server.update({
-    where: {
-      inviteCode: params.inviteCode,
-    },
-    data: {
-      members: {
-        create: [
-          {
-            profileId: profile.id,
-          },
-        ],
-      },
-    },
-  });
+        if (existingServer) {
+          redirect(`/servers/${existingServer._id}`);
+          return;
+        }
 
-  if (server) redirect(`/servers/${server.id}`);
+        setHasJoined(true);
 
-  return null;
+        // Join the server
+        const server = await joinServer({
+          inviteCode: params.inviteCode,
+          userId: user?.userId,
+        });
+
+        if (server) {
+          redirect(`/servers/${server._id}`);
+        }
+      } catch (error) {
+        console.error("Error joining server:", error);
+        redirect("/");
+      }
+    };
+
+    if (profile && params.inviteCode && servers !== undefined) {
+      handleJoin();
+    }
+  }, [profile, params.inviteCode, servers, user?.userId, joinServer, hasJoined]);
+
+  if (profile === undefined || servers === undefined) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    redirect("/sign-in");
+    return null;
+  }
+
+  if (!params.inviteCode) {
+    redirect("/");
+    return null;
+  }
+
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+    </div>
+  );
 };
 
 export default InviteCodePage;

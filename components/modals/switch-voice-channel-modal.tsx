@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChannelType } from "@prisma/client";
+import { ChannelType } from "@/types/conversation";
 import axios from "axios";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -11,12 +11,12 @@ import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   Form,
   FormControl,
@@ -61,24 +61,24 @@ export const SwitchVoiceChannelModal = () => {
   }
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-left font-bold">
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-left font-bold">
             Are you sure?
-          </DialogTitle>
-        </DialogHeader>
+          </DrawerTitle>
+        </DrawerHeader>
         <div className="px-6 pb-6 flex flex-col items-center gap-4">
           <span className="text-left">Looks like you are already in a voice channel. Are you sure you want to switch to <b>{channel?.name}</b>?</span>
           <Button
-            variant="primary"
+            variant="default"
             className="self-end"
             onClick={() => switchChannel()}
           >
             Switch channel
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 };

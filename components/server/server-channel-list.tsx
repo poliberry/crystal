@@ -39,7 +39,7 @@ export const ServerChannelList = ({ categories, role, server }) => {
             payload.categoryId = targetCategoryId;
         }
 
-        await fetch(`/api/channels/reorder?channelId=${channelId}&serverId=${server.id}`, {
+        await fetch(`/api/channels/reorder?channelId=${channelId}&serverId=${server?._id || server?.id}`, {
             method: "PATCH",
             headers: {
                 "Content-Type": "application/json",
@@ -51,9 +51,12 @@ export const ServerChannelList = ({ categories, role, server }) => {
         router.refresh();
     };
 
+    // Handle undefined categories
+    const safeCategories = categories || [];
+
     return (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            {categories.map((category) => (
+            {safeCategories.map((category) => (
                 <div key={category.id}>
                     <ServerSection
                         sectionType="category"
@@ -63,13 +66,13 @@ export const ServerChannelList = ({ categories, role, server }) => {
                         categoryId={category.id}
                     />
                     <SortableContext
-                        items={category.channels.map((c) => c.id)}
+                        items={category.channels.map((c) => c.id || c._id)}
                         strategy={verticalListSortingStrategy}
                     >
                         <div className="space-y-[2px]">
                             {category.channels.map((channel) => (
                                 <ServerChannel
-                                    key={channel.id}
+                                    key={channel.id || channel._id}
                                     channel={channel}
                                     role={role}
                                     server={server}

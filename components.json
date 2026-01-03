@@ -1,12 +1,13 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "default",
+  "style": "base-lyra",
   "rsc": true,
   "tsx": true,
+  "iconLibrary": "tabler",
   "tailwind": {
     "config": "tailwind.config.ts",
     "css": "app/globals.css",
-    "baseColor": "stone",
+    "baseColor": "zinc",
     "cssVariables": true,
     "prefix": ""
   },

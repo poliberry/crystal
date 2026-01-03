@@ -1,8 +1,9 @@
 "use client";
 
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useNotifications } from "@/hooks/use-notifications";
-import { useSocket } from "@/components/providers/socket-provider";
-import { useUser } from "@clerk/nextjs";
+import { useAuthStore } from "@/lib/auth-store";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { UserAvatar } from "@/components/user-avatar";
@@ -20,41 +21,15 @@ interface ConversationParticipant {
 
 export const ConversationNotificationBar = () => {
   const { notifications } = useNotifications();
-  const { socket } = useSocket();
-  const { user } = useUser();
+  const { user } = useAuthStore();
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+  const markConversationAsRead = useMutation(api.notifications.markConversationAsRead);
   const router = useRouter();
   const [participants, setParticipants] = useState<ConversationParticipant[]>([]);
   const [clickingConversation, setClickingConversation] = useState<string | null>(null);
-
-  // Listen for real-time notification updates
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleNewNotification = () => {
-      // Refresh participants when new notifications arrive
-      processNotifications();
-    };
-
-    const handleConversationMarkRead = (data: { conversationId: string, profileId: string }) => {
-      // Remove the conversation from participants when marked as read
-      setParticipants(prev => prev.filter(p => p.conversationId !== data.conversationId));
-    };
-
-    const handleNotificationUpdate = () => {
-      // Refresh when any notification is updated
-      processNotifications();
-    };
-
-    socket.on("notification:new", handleNewNotification);
-    socket.on("conversation:marked-as-read", handleConversationMarkRead);
-    socket.on("notification:update", handleNotificationUpdate);
-
-    return () => {
-      socket.off("notification:new", handleNewNotification);
-      socket.off("conversation:marked-as-read", handleConversationMarkRead);
-      socket.off("notification:update", handleNotificationUpdate);
-    };
-  }, [socket]);
 
   // Process notifications to get conversation participants with unread counts
   const processNotifications = () => {
@@ -82,7 +57,7 @@ export const ConversationNotificationBar = () => {
           }
         } else {
           // For direct messages, use the sender's profile
-          if (notification.triggeredBy && notification.triggeredBy.name !== user?.fullName && notification.triggeredBy.name !== user?.firstName) {
+          if (notification.triggeredBy && notification.triggeredBy.name !== profile?.globalName && notification.triggeredBy.name !== profile?.name) {
             const existing = conversationMap.get(conversationId);
             if (existing) {
               existing.unreadCount += 1;
@@ -118,18 +93,12 @@ export const ConversationNotificationBar = () => {
     setParticipants(prev => prev.filter(p => p.conversationId !== conversationId));
     
     try {
-      // Mark conversation as read via socket API
-      const response = await fetch("/api/socket/conversation-mark-read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId }),
+      // Mark conversation as read via Convex
+      await markConversationAsRead({
+        conversationId: conversationId as any,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to mark as read");
-      }
-
-      // Navigate to the conversation after successful API call
+      // Navigate to the conversation after successful update
       router.push(`/conversations/${conversationId}`);
     } catch (error) {
       console.error("Failed to mark conversation as read:", error);

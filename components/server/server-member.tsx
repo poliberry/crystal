@@ -1,37 +1,46 @@
-"use client"
+"use client";
 
-import {
-  MemberRole,
-  type Member,
-  type Profile,
-  type Server,
-} from "@prisma/client";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 
 import { cn } from "@/lib/utils";
 
 import { UserAvatar } from "../user-avatar";
-import { useEffect, useState } from "react";
-import { useSocket } from "../providers/socket-provider";
 import { UserDialog } from "../user-dialog";
+import { Card } from "../ui/card";
 
 type ServerMemberProps = {
-  member: Member & { profile: Profile };
-  server: Server;
-  profile: Profile | null;
+  member: any;
+  server: any;
+  profile: any;
 };
 
 const roleIconMap = {
-  [MemberRole.GUEST]: null,
-  [MemberRole.MODERATOR]: (
-    <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />
-  ),
-  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
+  ["GUEST"]: null,
+  ["MODERATOR"]: <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />,
+  ["ADMIN"]: <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
 };
 
-export const ServerMember = ({ member, profile, server }: ServerMemberProps) => {
-  const { socket } = useSocket();
+export const ServerMember = ({
+  member,
+  profile,
+  server,
+}: ServerMemberProps) => {
+  const { user } = useAuthStore();
+
+  // Handle cases where member.profile might be undefined or missing userId
+  const memberProfileData = member.profile || {};
+  const memberUserId = memberProfileData.userId;
+
+  // Get real-time profile status from Convex
+  const memberProfile = useQuery(
+    api.profiles.getByUserId,
+    memberUserId && user?.userId ? { userId: memberUserId } : "skip"
+  );
+
   const onClick = () => {
     if (member.profile.name === profile?.name) {
       router.push(`/conversations/me`);
@@ -42,39 +51,12 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
   };
   const params = useParams();
   const router = useRouter();
-  const [status, setStatus] = useState<"ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE">(member.profile.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
-  const [presenceStatus, setPresenceStatus] = useState<string | null>(member.profile.presenceStatus);
-  const icon = roleIconMap[member.role];
 
-  // Listen for socket status updates
-  useEffect(() => {
-    const statusHandler = (payload: { userId: string; status: string }) => {
-      if (payload.userId === member.profile.userId) {
-        const allowedStatuses = ["ONLINE", "IDLE", "DND", "INVISIBLE", "OFFLINE"];
-        if (allowedStatuses.includes(payload.status)) {
-          setStatus(payload.status as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE");
-        }
-      }
-    };
-
-    const presenceHandler = (payload: { userId: string; presenceStatus: string | null }) => {
-      if (payload.userId === member.profile.userId) {
-        setPresenceStatus(payload.presenceStatus);
-      }
-    };
-
-    // @ts-ignore
-    socket.on("user:status:update", statusHandler);
-    // @ts-ignore
-    socket.on("user:presence:update", presenceHandler);
-    
-    return () => {
-      // @ts-ignore
-      socket.off("user:status:update", statusHandler);
-      // @ts-ignore
-      socket.off("user:presence:update", presenceHandler);
-    };
-  }, [member.profile.userId, socket]);
+  // Use status from Convex query, fallback to member prop
+  const status = (memberProfile?.status ||
+    memberProfileData.status ||
+    "OFFLINE") as "ONLINE" | "IDLE" | "DND" | "INVISIBLE" | "OFFLINE";
+  const icon = roleIconMap[member.role as keyof typeof roleIconMap];
 
   // Status indicator mapping
   const statusMap: Record<string, { color: string; text: string }> = {
@@ -86,67 +68,76 @@ export const ServerMember = ({ member, profile, server }: ServerMemberProps) => 
 
   const isOffline = status === "OFFLINE" || !status;
 
+  // Handle ID format (Convex uses _id, Prisma uses id)
+  const profileId = memberProfileData._id || memberProfileData.id;
+  const serverId = (server as any)?._id || (server as any)?.id;
+  const memberId = (member as any)?._id || (member as any)?.id;
+
+  if (!memberProfileData || !profileId) {
+    return null; // Don't render if profile data is missing
+  }
+
   return (
-    <UserDialog profileId={member.profile.id} serverId={server.id}>
-      <button
-      className={cn(
-        "group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition mb-1",
-        params?.memberId === member.id && "bg-zinc-700/20 dark:bg-zinc-700",
-      )}
-    >
-      <div className="relative">
-        <UserAvatar
-          src={member.profile.imageUrl}
-          alt={member.profile.globalName || member.profile.name}
-          className={cn(
-            "h-8 w-8 md:h-8 md:w-8 transition",
-            isOffline && "opacity-40"
-          )}
-        />
-        {!isOffline && statusMap[status] && (
-          <span
+    <div className="w-full">
+      <UserDialog profileId={profileId} serverId={serverId}>
+        <div className="w-full">
+          <Card
             className={cn(
-              "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white",
-              statusMap[status].color
-            )}
-            title={statusMap[status].text}
-          />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "font-semibold text-sm group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
-            isOffline
-              ? "text-zinc-400 opacity-70"
-              : "text-zinc-500 dark:text-zinc-400",
-            params?.memberId === member.id &&
-              (isOffline
-                ? ""
-                : "text-primary dark:text-zinc-200 dark:group-hover:text-white")
-          )}
-        >
-          {member.profile.globalName || member.profile.name}
-        </p>
-        {!isOffline && presenceStatus && (
-          <p
-            className={cn(
-              "text-xs truncate group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
-              isOffline
-                ? "text-zinc-500 opacity-70"
-                : "text-zinc-400 dark:text-zinc-500",
-              params?.memberId === member.id &&
-                (isOffline
-                  ? ""
-                  : "text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300")
+              "px-2 py-2 flex flex-row items-center gap-x-2 w-full min-w-0 hover:bg-foreground/5 transition"
             )}
           >
-            {presenceStatus}
-          </p>
-        )}
-      </div>
-      {icon}
-    </button>
-    </UserDialog>
+          <div className="relative">
+            <UserAvatar
+              src={memberProfileData.imageUrl || ""}
+              alt={
+                memberProfileData.globalName ||
+                memberProfileData.name ||
+                "Unknown"
+              }
+              className={cn(
+                "h-8 w-8 md:h-8 md:w-8 transition",
+                isOffline && "opacity-40"
+              )}
+            />
+            {!isOffline && statusMap[status] && (
+              <span
+                className={cn(
+                  "absolute bottom-0 right-0 w-3 h-3 border-2 border-sidebar",
+                  statusMap[status].color
+                )}
+                title={statusMap[status].text}
+              />
+            )}
+          </div>
+          <div className="flex-1 w-full">
+            <p
+              className={cn(
+                "font-semibold text-sm group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
+                isOffline
+                  ? "text-zinc-400 opacity-70"
+                  : "text-zinc-500 dark:text-zinc-400",
+                params?.memberId === memberId &&
+                  (isOffline
+                    ? ""
+                    : "text-primary dark:text-zinc-200 dark:group-hover:text-white")
+              )}
+              style={
+                !isOffline && member.roleData?.color && !params?.memberId
+                  ? {
+                      color: member.roleData.color,
+                    }
+                  : undefined
+              }
+            >
+              {memberProfileData.globalName ||
+                memberProfileData.name ||
+                "Unknown"}
+            </p>
+          </div>
+          {icon}
+          </Card>
+        </div>
+      </UserDialog>
+    </div>
   );
 };

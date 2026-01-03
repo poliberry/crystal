@@ -6,7 +6,6 @@ import qs from "query-string";
 
 import { ActionTooltip } from "../action-tooltip";
 import { useLiveKit } from "../providers/media-room-provider";
-import { useSocket } from "../providers/socket-provider";
 import { Button } from "../ui/button";
 
 export const ChatVideoButton = ({ user, caller, conversationName, conversation, currentProfile }: any) => {
@@ -15,11 +14,67 @@ export const ChatVideoButton = ({ user, caller, conversationName, conversation, 
   const params = useParams();
   const searchParams = useSearchParams();
   const media = useLiveKit();
-  const { socket } = useSocket();
 
   const isAudio = searchParams?.get("audio");
   const isVideo = searchParams?.get("video");
   const conversationId = params?.conversationId as string;
+
+  // Get the other user's profile for notifications
+  const getOtherUser = () => {
+    if (!conversation || !currentProfile) return null;
+    
+    // Find the other member in the conversation
+    const otherMember = conversation.members?.find(
+      (member: any) => 
+        member.profileId !== currentProfile._id && 
+        member.profileId !== currentProfile.id
+    );
+    
+    return otherMember?.profile || otherMember?.member?.profile;
+  };
+
+  const sendCallNotification = async (isVideoCall: boolean) => {
+    const otherUser = getOtherUser();
+    if (!otherUser?.userId || !currentProfile || !conversationId) {
+      console.warn("Cannot send call notification: missing required data", { 
+        otherUser: !!otherUser, 
+        userId: otherUser?.userId,
+        currentProfile: !!currentProfile,
+        conversationId 
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/notifications/incoming-dm-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscriberId: otherUser.userId,
+          title: isVideoCall ? "Incoming Video Call" : "Incoming Voice Call",
+          body: `${currentProfile.globalName || currentProfile.name} is calling you`,
+          imageUrl: currentProfile.imageUrl,
+          conversationId: conversationId,
+          conversationName: conversationName || "Direct Message",
+          callerName: currentProfile.globalName || currentProfile.name,
+          callerId: currentProfile._id || currentProfile.id,
+          isVideo: `${isVideoCall}`,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Failed to send call notification:", response.status, errorData);
+      } else {
+        const result = await response.json();
+        console.log("Call notification sent successfully:", result);
+      }
+    } catch (notifError) {
+      console.error("Failed to send call notification:", notifError);
+    }
+  };
 
   const handleVoiceCall = async () => {
     if (isAudio) {
@@ -37,18 +92,11 @@ export const ChatVideoButton = ({ user, caller, conversationName, conversation, 
       );
       router.push(url);
     } else {
-      // Start voice call - emit socket event first
+      // Start voice call
       if (conversationId && conversation && currentProfile) {
-        // Emit websocket event for call initiation
-        socket?.emit("call:start", {
-          conversationId: conversationId,
-          type: "voice",
-          callerId: currentProfile.id,
-          callerName: currentProfile.globalName || currentProfile.name,
-          callerAvatar: currentProfile.imageUrl,
-          participantIds: conversation.members?.map((m: any) => m.member.profile.id) || [],
-        });
-
+        // Send notification to the other user
+        await sendCallNotification(false);
+        
         media.joinConversation(conversationId, conversationName || "Call", true, false);
         const url = qs.stringifyUrl(
           {
@@ -81,18 +129,11 @@ export const ChatVideoButton = ({ user, caller, conversationName, conversation, 
       );
       router.push(url);
     } else {
-      // Start video call - emit socket event first
+      // Start video call
       if (conversationId && conversation && currentProfile) {
-        // Emit websocket event for call initiation
-        socket?.emit("call:start", {
-          conversationId: conversationId,
-          type: "video",
-          callerId: currentProfile.id,
-          callerName: currentProfile.globalName || currentProfile.name,
-          callerAvatar: currentProfile.imageUrl,
-          participantIds: conversation.members?.map((m: any) => m.member.profile.id) || [],
-        });
-
+        // Send notification to the other user
+        await sendCallNotification(true);
+        
         media.joinConversation(conversationId, conversationName || "Call", true, true);
         const url = qs.stringifyUrl(
           {

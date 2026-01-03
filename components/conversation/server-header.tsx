@@ -1,6 +1,6 @@
 "use client";
 
-import { MemberRole } from "@prisma/client";
+import { MemberRole } from "@/types/conversation";
 import {
   ChevronDown,
   FolderPlus,

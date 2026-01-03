@@ -1,25 +1,29 @@
 "use client";
 
-import axios from "axios";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useModal } from "@/hooks/use-modal-store";
 import { useOrigin } from "@/hooks/use-origin";
 import { ActionTooltip } from "../action-tooltip";
+import { useAuthStore } from "@/lib/auth-store";
 
 export const InviteModal = () => {
   const { isOpen, onOpen, onClose, type, data } = useModal();
   const origin = useOrigin();
+  const { user } = useAuthStore();
+  const regenerateInviteCode = useMutation(api.servers.regenerateInviteCode);
 
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,11 +46,15 @@ export const InviteModal = () => {
     try {
       setIsLoading(true);
 
-      const response = await axios.patch(
-        `/api/servers/${server?.id}/invite-code`,
-      );
+      const serverId = (server as any)?._id || (server as any)?.id;
+      const updatedServer = await regenerateInviteCode({
+        serverId: serverId as any,
+        userId: user?.userId,
+      });
 
-      onOpen("invite", { server: response.data });
+      if (updatedServer) {
+        onOpen("invite", { server: updatedServer as any });
+      }
     } catch (error: unknown) {
       console.error(error);
     } finally {
@@ -55,13 +63,13 @@ export const InviteModal = () => {
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={onClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={onClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Invite Friends
-          </DialogTitle>
-        </DialogHeader>
+          </DrawerTitle>
+        </DrawerHeader>
 
         <div className="p-6">
           <Label className="uppercase text-xs font-bold text-zinc-500">
@@ -108,7 +116,7 @@ export const InviteModal = () => {
             <RefreshCw className="w-4 h-4 ml-2" />
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </DrawerContent>
+    </Drawer>
   );
 };

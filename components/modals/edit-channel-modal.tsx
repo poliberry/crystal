@@ -2,30 +2,23 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChannelType } from "@/types/conversation";
-import axios from "axios";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import qs from "query-string";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -34,6 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useModal } from "@/hooks/use-modal-store";
+import { useAuthStore } from "@/lib/auth-store";
+import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   name: z
@@ -51,10 +46,19 @@ export const EditChannelModal = () => {
   const { isOpen, onClose, type, data } = useModal();
   const { channel, server } = data;
   const router = useRouter();
+  const { user } = useAuthStore();
+  const updateChannel = useMutation(api.channels.update);
 
   const isModalOpen = isOpen && type === "editChannel";
 
-  const form = useForm({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setValue,
+    watch,
+    reset,
+  } = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
@@ -62,27 +66,30 @@ export const EditChannelModal = () => {
     },
   });
 
+  const channelTypeValue = watch("type");
+
   useEffect(() => {
     if (channel) {
-      form.setValue("name", channel.name);
-      form.setValue("type", channel.type);
+      setValue("name", channel.name);
+      setValue("type", channel.type);
     }
-  }, [form, channel]);
+  }, [channel, setValue]);
 
-  const isLoading = form.formState.isSubmitting;
+  const isLoading = isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const url = qs.stringifyUrl({
-        url: `/api/channels/${channel?.id}`,
-        query: {
-          serverId: server?.id,
-        },
+      if (!channel) return;
+      const channelId = (channel as any)?._id || (channel as any)?.id;
+      if (!channelId) return;
+      await updateChannel({
+        channelId: channelId as any,
+        name: values.name,
+        type: values.type as "TEXT" | "AUDIO" | "VIDEO",
+        userId: user?.userId,
       });
 
-      await axios.patch(url, values);
-
-      form.reset();
+      reset();
       router.refresh();
       onClose();
     } catch (error) {
@@ -91,99 +98,85 @@ export const EditChannelModal = () => {
   };
 
   const handleClose = () => {
-    form.reset();
+    reset();
     onClose();
   };
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 overflow-hidden">
-        <DialogHeader className="pt-8 px-6">
-          <DialogTitle className="text-2xl text-center font-bold">
+    <Drawer open={isModalOpen} onOpenChange={handleClose} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-2xl text-center font-bold">
             Edit channel
-          </DialogTitle>
-        </DialogHeader>
+          </DrawerTitle>
+        </DrawerHeader>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-8"
-            autoCapitalize="off"
-            autoComplete="off"
-          >
-            <div className="space-y-8 px-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="uppercase text-xs font-bold text-zinc-500">
-                      Channel name
-                    </FormLabel>
-
-                    <FormControl>
-                      <Input
-                        disabled={isLoading}
-                        aria-disabled={isLoading}
-                        className="dark:bg-zinc-300/10 bg-zinc-300/50 border-0 dark:text-white text-black"
-                        placeholder="Enter channel name"
-                        {...field}
-                      />
-                    </FormControl>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Channel Type</FormLabel>
-                    <Select
-                      disabled={isLoading}
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="dark:bg-zinc-300/10 bg-zinc-300/50 capitalize">
-                          <SelectValue placeholder="Select a channel type" />
-                        </SelectTrigger>
-                      </FormControl>
-
-                      <SelectContent>
-                        {Object.values(ChannelType).map((type) => (
-                          <SelectItem
-                            key={type}
-                            value={type}
-                            className="capitalize"
-                          >
-                            {type.toLowerCase()}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter className="px-6 py-4">
-              <Button
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-8"
+          autoCapitalize="off"
+          autoComplete="off"
+        >
+          <div className="space-y-8 px-6">
+            <div className="space-y-2">
+              <Label className="uppercase text-xs font-bold text-zinc-500">
+                Channel name
+              </Label>
+              <Input
                 disabled={isLoading}
                 aria-disabled={isLoading}
-                variant="primary"
+                className={cn(
+                  "dark:bg-zinc-300/10 bg-zinc-300/50 border-0 dark:text-white text-black",
+                  errors.name && "border-red-500"
+                )}
+                placeholder="Enter channel name"
+                {...register("name")}
+              />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Channel Type</Label>
+              <Select
+                disabled={isLoading}
+                value={channelTypeValue}
+                onValueChange={(value) => setValue("type", value as ChannelType)}
               >
-                Save
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                <SelectTrigger className="dark:bg-zinc-300/10 bg-zinc-300/50 capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(ChannelType).map((type) => (
+                    <SelectItem
+                      key={type}
+                      value={type}
+                      className="capitalize"
+                    >
+                      {type.toLowerCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.type && (
+                <p className="text-sm text-red-500">{errors.type.message}</p>
+              )}
+            </div>
+          </div>
+
+          <DrawerFooter>
+            <Button
+              disabled={isLoading}
+              aria-disabled={isLoading}
+              variant="default"
+              type="submit"
+            >
+              Save
+            </Button>
+          </DrawerFooter>
+        </form>
+      </DrawerContent>
+    </Drawer>
   );
 };

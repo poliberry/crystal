@@ -1,39 +1,45 @@
+"use client";
+
 import { redirect } from "next/navigation";
-import { currentProfile } from "@/lib/current-profile";
-import { db } from "@/lib/db";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { MemberSidebar } from "./member-sidebar";
 
 type MemberSidebarWrapperProps = {
   serverId: string;
 };
 
-export const MemberSidebarWrapper = async ({ serverId }: MemberSidebarWrapperProps) => {
-  const profile = await currentProfile();
+export const MemberSidebarWrapper = ({ serverId }: MemberSidebarWrapperProps) => {
+  const { user } = useAuthStore();
+  
+  const profile = useQuery(
+    api.profiles.getCurrent,
+    user?.userId ? { userId: user.userId } : "skip"
+  );
 
-  if (!profile) redirect("/");
+  const server = useQuery(
+    api.servers.getById,
+    serverId ? { serverId: serverId as any } : "skip"
+  );
 
-  const server = await db.server.findUnique({
-    where: {
-      id: serverId,
-    },
-    include: {
-      channels: {
-        orderBy: {
-          createdAt: "asc",
-        },
-      },
-      members: {
-        include: {
-          profile: true,
-        },
-        orderBy: {
-          role: "asc",
-        },
-      },
-    },
-  });
+  if (profile === undefined || server === undefined) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
-  if (!server) redirect("/");
+  if (!profile) {
+    redirect("/");
+    return null;
+  }
+
+  if (!server) {
+    redirect("/");
+    return null;
+  }
 
   return (
     <MemberSidebar

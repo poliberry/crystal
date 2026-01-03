@@ -20,7 +20,9 @@ import { UserSettingsModal } from "../modals/user-settings-modal";
 import { DMCallModal } from "../modals/dm-call-modal";
 import { CreateDirectMessageModal } from "../modals/create-direct-message-modal";
 import { CreateGroupModal } from "../modals/create-group-modal";
+import { EditGroupModal } from "../modals/edit-group-modal";
 import { SetStatusModal } from "../modals/set-status-modal";
+import { ViewImageModal } from "../modals/view-image-modal";
 
 export const ModalProvider = () => {
   const [isMounted, setIsMounted] = useState(false);
@@ -49,7 +51,9 @@ export const ModalProvider = () => {
       <DMCallModal />
       <CreateDirectMessageModal />
       <CreateGroupModal />
+      <EditGroupModal />
       <SetStatusModal />
+      <ViewImageModal />
     </>
   );
 };

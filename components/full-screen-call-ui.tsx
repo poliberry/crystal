@@ -31,7 +31,7 @@ import { ActionTooltip } from "@/components/action-tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLiveKit } from "./providers/media-room-provider";
-import { ConversationType } from "@prisma/client";
+import { ConversationType } from "@/types/conversation";
 
 type FullScreenCallUIProps = {
   conversationId: string;
@@ -89,7 +89,14 @@ export const FullScreenCallUI = ({
   };
 
   const toggleScreenShare = () => {
-    localParticipant.setScreenShareEnabled(!localParticipant.isScreenShareEnabled);
+    const isEnabled = localParticipant.isScreenShareEnabled;
+    if (isEnabled) {
+      localParticipant.setScreenShareEnabled(false);
+    } else {
+      localParticipant.setScreenShareEnabled(true, {
+        audio: true
+      });
+    }
   };
 
   const endCall = () => {

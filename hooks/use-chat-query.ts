@@ -1,52 +1,57 @@
-import qs from "query-string";
-import { useInfiniteQuery } from "@tanstack/react-query";
+// Updated to use Convex queries instead of React Query + API routes
+// Convex queries are reactive and update automatically
 
-import { useSocket } from "@/components/providers/socket-provider";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
 
 interface ChatQueryProps {
   queryKey: string;
-  apiUrl: string;
+  apiUrl: string; // Deprecated - kept for compatibility
   paramKey: "channelId" | "conversationId";
   paramValue: string;
 }
 
 export const useChatQuery = ({
   queryKey,
-  apiUrl,
+  apiUrl, // Not used anymore
   paramKey,
   paramValue,
 }: ChatQueryProps) => {
-  const { isConnected } = useSocket();
+  const { user } = useAuthStore();
 
-  const fetchMessages = async ({ pageParam = undefined }) => {
-    const url = qs.stringifyUrl(
-      {
-        url: apiUrl,
-        query: {
-          cursor: pageParam,
-          [paramKey]: paramValue,
-        },
-      },
-      { skipNull: true },
-    );
+  // Use Convex query based on paramKey
+  const data = useQuery(
+    paramKey === "channelId"
+      ? api.messages.getByChannel
+      : api.directMessages.getByConversation,
+    paramValue && user?.userId
+      ? {
+          [paramKey]: paramValue as any,
+          userId: user.userId,
+        }
+      : "skip"
+  );
 
-    const res = await fetch(url);
-    return res.json();
-  };
-
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, status } =
-    useInfiniteQuery({
-      queryKey: [queryKey],
-      queryFn: fetchMessages,
-      getNextPageParam: (lastPage) => lastPage?.nextCursor,
-      refetchInterval: isConnected ? false : 1000,
-    });
-
+  // Convex queries handle pagination differently
+  // For now, return a compatible structure
   return {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    status,
+    data: data
+      ? {
+          pages: [
+            {
+              items: data.items || [],
+              nextCursor: data.nextCursor || null,
+            },
+          ],
+        }
+      : undefined,
+    fetchNextPage: async () => {
+      // TODO: Implement pagination with Convex
+      console.warn("Pagination not yet implemented with Convex");
+    },
+    hasNextPage: !!data?.nextCursor,
+    isFetchingNextPage: false,
+    status: data ? "success" : "loading",
   };
 };

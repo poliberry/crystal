@@ -148,7 +148,7 @@ import { FloatingCallCard } from "./call-ui";
 import { useLiveKit } from "./providers/media-room-provider";
 import { cn } from "@/lib/utils";
 import { Track } from "livekit-client";
-import { Channel, Server } from "@prisma/client";
+import { Channel, Server } from "@/types/conversation";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { roomService } from "@/lib/livekit-room-service";
 import { ActionTooltip } from "./action-tooltip";
@@ -163,7 +163,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
-import { useSocket } from "./providers/socket-provider";
 
 // Vesktop Types
 type SpecialSource = "None" | "Entire System";
@@ -200,7 +199,6 @@ type MediaRoomProps = {
 
 export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const livekit = useLiveKit();
-  const { socket } = useSocket();
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
   const [activeParticipant, setActiveParticipant] = useState<any>(null);
   const [activeScreenShare, setActiveScreenShare] = useState<any>(null);
@@ -217,16 +215,6 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
       setOutputDevices(devices.filter((d) => d.kind === "audiooutput"));
       setCameraDevices(devices.filter((d) => d.kind === "videoinput"));
     });
-
-    const updateUserInfo = (name: string) => {
-      localParticipant.setName(name);
-    }
-
-    socket.on("room:update-profile", updateUserInfo);
-
-    return () => {
-      socket.off("room:update-profile", updateUserInfo);
-    };
   }, []);
 
   const handleSelectInput = async (deviceId: string) => {
