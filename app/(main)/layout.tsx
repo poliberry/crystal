@@ -6,13 +6,14 @@ import { NavigationSidebar } from "@/components/navigation/navigation-sidebar";
 import { CustomCssInjector } from "@/components/custom-css-injector";
 import { LiveKitProvider } from "@/components/providers/media-room-provider";
 import { ModalProvider } from "@/components/providers/modal-provider";
-import { Google_Sans_Code } from "next/font/google";
+import { Cascadia_Mono, JetBrains_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { TopNavigationBar } from "@/components/navigation/top-navigation-bar";
 
-const googleSansCode = Google_Sans_Code({
+const cascadiaMono = Cascadia_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
 });
 
 const MainLayout = ({ children }: PropsWithChildren) => {
@@ -22,7 +23,7 @@ const MainLayout = ({ children }: PropsWithChildren) => {
       <div
         className={cn(
           "h-screen w-full flex flex-col bg-background",
-          googleSansCode.className
+          cascadiaMono.className
         )}
       >
         {/* Navigation */}

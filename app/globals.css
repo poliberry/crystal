@@ -122,26 +122,6 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
-.headerFont {
-  font-family: "Bitcount Grid Single", system-ui;
-  font-optical-sizing: auto;
-  font-weight: 300;
-  font-style: normal;
-  font-variation-settings:
-    "slnt" 0,
-    "CRSV" 0.5,
-    "ELSH" 0,
-    "ELXP" 0;
-}
-
-.hubot-sans {
-  font-family: "Hubot Sans", sans-serif;
-  font-optical-sizing: auto;
-  font-variation-settings:
-    "wdth" 100;
-}
-
-
 /* Custom NProgress styles for Discord theme */
 #nprogress {
   pointer-events: none;
