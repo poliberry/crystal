@@ -68,6 +68,7 @@ export default defineSchema({
     color: v.optional(v.string()),
     permissions: v.array(v.string()), // Array of permission strings
     position: v.number(), // For ordering roles
+    index: v.optional(v.number()), // For ordering hoisted roles in member list
     mentionable: v.boolean(),
     hoist: v.boolean(), // Show members with this role separately
     createdAt: v.number(),
@@ -233,5 +234,30 @@ export default defineSchema({
     .index("by_profileId", ["profileId"])
     .index("by_profileId_channelId", ["profileId", "channelId"])
     .index("by_profileId_conversationId", ["profileId", "conversationId"]),
+
+  notificationSettings: defineTable({
+    profileId: v.id("profiles"),
+    userId: v.string(),
+    serverMessages: v.boolean(), // Enable/disable server message notifications
+    directMessages: v.boolean(), // Enable/disable direct message notifications
+    friendRequests: v.boolean(), // Enable/disable friend request notifications
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_profileId", ["profileId"])
+    .index("by_userId", ["userId"]),
+
+  mutedChannels: defineTable({
+    profileId: v.id("profiles"),
+    userId: v.string(),
+    channelId: v.id("channels"),
+    serverId: v.id("servers"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_profileId", ["profileId"])
+    .index("by_userId", ["userId"])
+    .index("by_channelId", ["channelId"])
+    .index("by_userId_channelId", ["userId", "channelId"]),
 });
 

@@ -13,19 +13,26 @@ import { TopNavigationBar } from "@/components/navigation/top-navigation-bar";
 const cascadiaMono = Cascadia_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+  fallback: [
+    "ui-monospace",
+    "SFMono-Regular",
+    "Menlo",
+    "Monaco",
+    "Consolas",
+    "monospace",
+  ],
 });
 
 const MainLayout = ({ children }: PropsWithChildren) => {
   return (
     <LiveKitProvider>
-      <ModalProvider />
       <div
         className={cn(
           "h-screen w-full flex flex-col bg-background",
           cascadiaMono.className
         )}
       >
+        <ModalProvider />
         {/* Navigation */}
         <div className="w-full">
           <TopNavigationBar />

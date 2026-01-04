@@ -32,6 +32,7 @@ export const create = mutation({
     color: v.optional(v.string()),
     permissions: v.array(v.string()),
     position: v.number(),
+    index: v.optional(v.number()),
     mentionable: v.boolean(),
     hoist: v.boolean(),
     userId: v.optional(v.string()),
@@ -56,12 +57,31 @@ export const create = mutation({
       throw new Error("Insufficient permissions");
     }
     
+    // If index not provided, set it to the max index + 1 for hoisted roles, or 0 for non-hoisted
+    let index = args.index;
+    if (index === undefined) {
+      const allRoles = await ctx.db
+        .query("roles")
+        .withIndex("by_serverId", (q: any) => q.eq("serverId", args.serverId))
+        .collect();
+      const hoistedRoles = allRoles.filter((r) => r.hoist && r.index !== undefined);
+      if (args.hoist && hoistedRoles.length > 0) {
+        const maxIndex = Math.max(...hoistedRoles.map((r) => r.index || 0));
+        index = maxIndex + 1;
+      } else if (args.hoist) {
+        index = 0;
+      } else {
+        index = undefined; // Non-hoisted roles don't need an index
+      }
+    }
+    
     const roleId = await ctx.db.insert("roles", {
       serverId: args.serverId,
       name: args.name,
       color: args.color,
       permissions: args.permissions,
       position: args.position,
+      index: index,
       mentionable: args.mentionable ?? false,
       hoist: args.hoist ?? false,
       createdAt: Date.now(),
@@ -80,6 +100,7 @@ export const update = mutation({
     color: v.optional(v.string()),
     permissions: v.optional(v.array(v.string())),
     position: v.optional(v.number()),
+    index: v.optional(v.number()),
     mentionable: v.optional(v.boolean()),
     hoist: v.optional(v.boolean()),
     userId: v.optional(v.string()),
@@ -109,10 +130,143 @@ export const update = mutation({
     if (args.color !== undefined) updates.color = args.color;
     if (args.permissions !== undefined) updates.permissions = args.permissions;
     if (args.position !== undefined) updates.position = args.position;
+    if (args.index !== undefined) updates.index = args.index;
     if (args.mentionable !== undefined) updates.mentionable = args.mentionable;
     if (args.hoist !== undefined) updates.hoist = args.hoist;
     
     await ctx.db.patch(args.roleId, updates);
+    return await ctx.db.get(args.roleId);
+  },
+});
+
+// Move a role up in the hierarchy (decrease index)
+export const moveUp = mutation({
+  args: {
+    roleId: v.id("roles"),
+    userId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const profile = await requireProfile(ctx, args.userId);
+    const role = await ctx.db.get(args.roleId);
+    
+    if (!role) {
+      throw new Error("Role not found");
+    }
+    
+    // Check permissions
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_profileId_serverId", (q: any) =>
+        q.eq("profileId", profile._id).eq("serverId", role.serverId)
+      )
+      .first();
+    
+    if (!member || (member.role !== "ADMIN" && !member.roleId)) {
+      throw new Error("Insufficient permissions");
+    }
+    
+    // Only move hoisted roles with an index
+    if (!role.hoist || role.index === undefined) {
+      throw new Error("Can only reorder hoisted roles that have an index");
+    }
+    
+    // Get all hoisted roles for this server, sorted by index
+    const allRoles = await ctx.db
+      .query("roles")
+      .withIndex("by_serverId", (q: any) => q.eq("serverId", role.serverId))
+      .collect();
+    
+    const hoistedRoles = allRoles
+      .filter((r) => r.hoist && r.index !== undefined)
+      .sort((a, b) => (a.index || 0) - (b.index || 0));
+    
+    const currentIndex = hoistedRoles.findIndex((r) => r._id === args.roleId);
+    
+    if (currentIndex <= 0) {
+      // Already at the top
+      return await ctx.db.get(args.roleId);
+    }
+    
+    // Swap with the role above
+    const roleAbove = hoistedRoles[currentIndex - 1];
+    const currentIndexValue = role.index || 0;
+    const aboveIndexValue = roleAbove.index || 0;
+    
+    await ctx.db.patch(args.roleId, {
+      index: aboveIndexValue,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.patch(roleAbove._id, {
+      index: currentIndexValue,
+      updatedAt: Date.now(),
+    });
+    
+    return await ctx.db.get(args.roleId);
+  },
+});
+
+// Move a role down in the hierarchy (increase index)
+export const moveDown = mutation({
+  args: {
+    roleId: v.id("roles"),
+    userId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const profile = await requireProfile(ctx, args.userId);
+    const role = await ctx.db.get(args.roleId);
+    
+    if (!role) {
+      throw new Error("Role not found");
+    }
+    
+    // Check permissions
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_profileId_serverId", (q: any) =>
+        q.eq("profileId", profile._id).eq("serverId", role.serverId)
+      )
+      .first();
+    
+    if (!member || (member.role !== "ADMIN" && !member.roleId)) {
+      throw new Error("Insufficient permissions");
+    }
+    
+    // Only move hoisted roles with an index
+    if (!role.hoist || role.index === undefined) {
+      throw new Error("Can only reorder hoisted roles that have an index");
+    }
+    
+    // Get all hoisted roles for this server, sorted by index
+    const allRoles = await ctx.db
+      .query("roles")
+      .withIndex("by_serverId", (q: any) => q.eq("serverId", role.serverId))
+      .collect();
+    
+    const hoistedRoles = allRoles
+      .filter((r) => r.hoist && r.index !== undefined)
+      .sort((a, b) => (a.index || 0) - (b.index || 0));
+    
+    const currentIndex = hoistedRoles.findIndex((r) => r._id === args.roleId);
+    
+    if (currentIndex >= hoistedRoles.length - 1) {
+      // Already at the bottom
+      return await ctx.db.get(args.roleId);
+    }
+    
+    // Swap with the role below
+    const roleBelow = hoistedRoles[currentIndex + 1];
+    const currentIndexValue = role.index || 0;
+    const belowIndexValue = roleBelow.index || 0;
+    
+    await ctx.db.patch(args.roleId, {
+      index: belowIndexValue,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.patch(roleBelow._id, {
+      index: currentIndexValue,
+      updatedAt: Date.now(),
+    });
+    
     return await ctx.db.get(args.roleId);
   },
 });

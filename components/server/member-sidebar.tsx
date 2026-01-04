@@ -161,9 +161,12 @@ export const MemberSidebar = ({
       return posB - posA;
     });
 
-    // Sort hoisted role groups by position (highest first)
+    // Sort hoisted role groups by index (lowest first, as index represents hierarchy order)
+    // If index is not set, fall back to position
     const sortedGroups = Object.values(groups).sort((a, b) => {
-      return b.role.position - a.role.position;
+      const indexA = a.role.index !== undefined ? a.role.index : a.role.position;
+      const indexB = b.role.index !== undefined ? b.role.index : b.role.position;
+      return indexA - indexB;
     });
 
     return { hoistedGroups: sortedGroups, onlineMembers, offlineMembers };

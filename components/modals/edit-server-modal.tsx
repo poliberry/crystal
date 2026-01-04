@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Settings, Trash2, Plus, X, Shield, Check, Users, Crown } from "lucide-react";
+import { Settings, Trash2, Plus, X, Shield, Check, Users, Crown, ChevronUp, ChevronDown } from "lucide-react";
 
 import { FileUpload } from "@/components/file-upload";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,8 @@ export const EditServerModal = () => {
   const updateRole = useMutation(api.roles.update);
   const removeRole = useMutation(api.roles.remove);
   const toggleRole = useMutation(api.members.toggleRole);
+  const moveRoleUp = useMutation(api.roles.moveUp);
+  const moveRoleDown = useMutation(api.roles.moveDown);
 
   const isModalOpen = isOpen && type === "editServer";
   const { server } = data;
@@ -201,12 +203,25 @@ export const EditServerModal = () => {
         ? Math.max(...roles.map((r: any) => r.position || 0))
         : 0;
 
+      // If hoisted, calculate index based on existing hoisted roles
+      let index: number | undefined = undefined;
+      if (roleHoist) {
+        const hoistedRoles = roles.filter((r: any) => r.hoist && r.index !== undefined);
+        if (hoistedRoles.length > 0) {
+          const maxIndex = Math.max(...hoistedRoles.map((r: any) => r.index || 0));
+          index = maxIndex + 1;
+        } else {
+          index = 0;
+        }
+      }
+
       await createRole({
         serverId: serverId as any,
         name: roleName,
         color: roleColor,
         permissions: rolePermissions,
         position: maxPosition + 1,
+        index: index,
         hoist: roleHoist,
         mentionable: roleMentionable,
         userId: user?.userId,
@@ -229,6 +244,29 @@ export const EditServerModal = () => {
     if (!roleName.trim()) return;
 
     try {
+      const currentRole = roles.find((r: any) => r._id === roleId);
+      const wasHoisted = currentRole?.hoist;
+      const isNowHoisted = roleHoist;
+      
+      // Handle index changes when hoist status changes
+      let index: number | undefined = undefined;
+      if (isNowHoisted && !wasHoisted) {
+        // Role is being hoisted - assign it an index
+        const hoistedRoles = roles.filter((r: any) => r.hoist && r._id !== roleId);
+        if (hoistedRoles.length > 0) {
+          const maxIndex = Math.max(...hoistedRoles.map((r: any) => r.index !== undefined ? r.index : 0));
+          index = maxIndex + 1;
+        } else {
+          index = 0;
+        }
+      } else if (!isNowHoisted && wasHoisted) {
+        // Role is being unhoisted - clear index
+        index = undefined;
+      } else if (isNowHoisted && wasHoisted) {
+        // Role remains hoisted - keep current index
+        index = currentRole?.index;
+      }
+      
       await updateRole({
         roleId: roleId as any,
         name: roleName,
@@ -236,6 +274,7 @@ export const EditServerModal = () => {
         permissions: rolePermissions,
         hoist: roleHoist,
         mentionable: roleMentionable,
+        index: index,
         userId: user?.userId,
       });
 
@@ -731,32 +770,105 @@ export const EditServerModal = () => {
                 <div className="space-y-2">
                   <h4 className="font-medium">Existing Roles</h4>
                   <div className="space-y-2">
-                    {roles.map((role: any) => (
-                      <div
-                        key={role._id}
-                        className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50"
-                      >
-                        <div className="flex items-center gap-3">
+                    {roles
+                      .sort((a: any, b: any) => {
+                        // Sort hoisted roles by index, then by position
+                        if (a.hoist && b.hoist) {
+                          const indexA = a.index !== undefined ? a.index : a.position;
+                          const indexB = b.index !== undefined ? b.index : b.position;
+                          return indexA - indexB;
+                        }
+                        // Non-hoisted roles sorted by position
+                        return a.position - b.position;
+                      })
+                      .map((role: any, index: number, sortedRoles: any[]) => {
+                        const isHoisted = role.hoist;
+                        const hoistedRoles = sortedRoles.filter((r: any) => r.hoist);
+                        const currentHoistedIndex = hoistedRoles.findIndex((r: any) => r._id === role._id);
+                        const canMoveUp = isHoisted && currentHoistedIndex > 0;
+                        const canMoveDown = isHoisted && currentHoistedIndex < hoistedRoles.length - 1;
+                        
+                        return (
                           <div
-                            className="w-4 h-4 rounded-full"
-                            style={{ backgroundColor: role.color || "#5865F2" }}
-                          />
-                          <div>
-                            <p className="font-medium">{role.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {role.permissions.length} permissions
-                            </p>
+                            key={role._id}
+                            className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50"
+                          >
+                            <div className="flex items-center gap-3 flex-1">
+                              <div
+                                className="w-4 h-4 rounded-full"
+                                style={{ backgroundColor: role.color || "#5865F2" }}
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{role.name}</p>
+                                  {isHoisted && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      Hoisted
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {role.permissions.length} permissions
+                                  {isHoisted && role.index !== undefined && (
+                                    <span className="ml-2">• Order: {role.index + 1}</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {isHoisted && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await moveRoleUp({
+                                          roleId: role._id as any,
+                                          userId: user?.userId,
+                                        });
+                                        router.refresh();
+                                      } catch (error) {
+                                        console.error("Failed to move role up:", error);
+                                      }
+                                    }}
+                                    disabled={!canMoveUp}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await moveRoleDown({
+                                          roleId: role._id as any,
+                                          userId: user?.userId,
+                                        });
+                                        router.refresh();
+                                      } catch (error) {
+                                        console.error("Failed to move role down:", error);
+                                      }
+                                    }}
+                                    disabled={!canMoveDown}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startEditRole(role)}
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEditRole(role)}
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                        );
+                      })}
                     {roles.length === 0 && (
                       <p className="text-sm text-muted-foreground text-center py-4">
                         No custom roles yet. Create one to get started!

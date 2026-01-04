@@ -233,6 +233,13 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
           })),
         });
 
+        // Collect subscriberIds from conversation members (excluding sender)
+        const subscriberIds = conversation?.members
+          ?.map((member: any) => member.profile?.userId)
+          .filter((userId: string | undefined): userId is string => 
+            Boolean(userId) && userId !== user?.userId
+          ) || [];
+
         if(conversation?.type === "GROUP_MESSAGE") {
           await axios.post("/api/notifications/new-group-message", {
             redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/conversations/${query.conversationId}`,
@@ -240,6 +247,8 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
             body: values.content || "",
             imageUrl: conversation?.imageUrl || user?.imageUrl,
             conversationId: query.conversationId,
+            senderUserId: user?.userId,
+            subscriberIds: subscriberIds,
           });
         } else {
           await axios.post("/api/notifications/new-direct-message", {
@@ -247,7 +256,9 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
             title: `${user?.globalName}`,
             body: values.content || "",
             imageUrl: user?.imageUrl,
-            subscriberId: conversation?.members[0]?.profile?.userId,
+            conversationId: query.conversationId,
+            senderUserId: user?.userId,
+            subscriberIds: subscriberIds,
           });
         }
 
@@ -263,12 +274,22 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
             url: att.url,
           })),
         });
+        // Collect subscriberIds from server members (excluding sender)
+        const subscriberIds = server?.members
+          ?.map((member: any) => member.profile?.userId)
+          .filter((userId: string | undefined): userId is string => 
+            Boolean(userId) && userId !== user?.userId
+          ) || [];
+
         await axios.post("/api/notifications/new-message", {
           redirectUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/servers/${server?._id}/channels/${channel?._id}`,
           title: `${user?.globalName} (${channel?.name} / ${category?.name}) in ${server?.name}`,
           body: values.content || "",
           imageUrl: user?.imageUrl,
           serverId: server?._id,
+          channelId: channel?._id,
+          senderUserId: user?.userId,
+          subscriberIds: subscriberIds,
         });
 
         reset();

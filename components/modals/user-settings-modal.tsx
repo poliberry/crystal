@@ -134,6 +134,13 @@ export const UserSettingsModal = () => {
   );
   const updateProfile = useMutation(api.profiles.update);
   const updateCustomisation = useMutation(api.userCustomisation.update);
+  // Note: notificationSettings API will be available after Convex regenerates
+  // @ts-ignore - Will be available after Convex regenerates API
+  const notificationSettings = useQuery(api.notificationSettings?.getByUserId, 
+    user?.userId ? { userId: user.userId } : "skip"
+  );
+  // @ts-ignore - Will be available after Convex regenerates API
+  const updateNotificationSettings = useMutation(api.notificationSettings?.update);
   const [activeTab, setActiveTab] = useState("account");
   const [loading, setLoading] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -665,7 +672,7 @@ export const UserSettingsModal = () => {
                         size="sm"
                         variant="outline"
                         className="w-full h-9"
-                        onClick={() => setTab("profile")}
+                        onClick={() => setActiveTab("profile")}
                       >
                         <IconSettings className="h-4 w-4 mr-2" />
                         Edit Profile
@@ -927,19 +934,49 @@ export const UserSettingsModal = () => {
                     <div>
                       <p className="font-medium">Direct Messages</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationSettings?.directMessages ?? true}
+                      onCheckedChange={async (checked) => {
+                        if (user?.userId && updateNotificationSettings) {
+                          await updateNotificationSettings({
+                            userId: user.userId,
+                            directMessages: checked,
+                          });
+                        }
+                      }}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Server Messages</p>
                     </div>
-                    <Switch />
+                    <Switch 
+                      checked={notificationSettings?.serverMessages ?? true}
+                      onCheckedChange={async (checked) => {
+                        if (user?.userId && updateNotificationSettings) {
+                          await updateNotificationSettings({
+                            userId: user.userId,
+                            serverMessages: checked,
+                          });
+                        }
+                      }}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Friend Requests</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={notificationSettings?.friendRequests ?? true}
+                      onCheckedChange={async (checked) => {
+                        if (user?.userId && updateNotificationSettings) {
+                          await updateNotificationSettings({
+                            userId: user.userId,
+                            friendRequests: checked,
+                          });
+                        }
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -1195,15 +1232,15 @@ export const UserSettingsModal = () => {
   };
 
   return (
-    <Drawer open={isModalOpen} onOpenChange={handleClose}>
-      <DrawerContent className="h-[90%] border-border">
+    <Dialog open={isModalOpen} onOpenChange={handleClose}>
+      <DialogContent className="h-[90%] border-border border-1 w-0 min-w-[70%]">
         <div className="flex flex-row w-full h-full min-h-0">
           {/* Sidebar */}
           <div className="flex flex-col w-1/4 p-4">
             <div className="flex items-center justify-between mb-6">
-              <DrawerTitle className="text-2xl font-bold">
+              <DialogTitle className="text-2xl font-bold">
                 User Settings
-              </DrawerTitle>
+              </DialogTitle>
             </div>
             <div className="flex-1 overflow-y-auto">{renderSidebar()}</div>
             <div className="pt-4 border-t border-border">
@@ -1223,7 +1260,7 @@ export const UserSettingsModal = () => {
             </div>
           </div>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </DialogContent>
+    </Dialog>
   );
 };

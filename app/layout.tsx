@@ -1,4 +1,3 @@
-
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Open_Sans, Overpass } from "next/font/google";
 
@@ -8,9 +7,11 @@ import { cn } from "@/lib/utils";
 import "./globals.css";
 import NotificationListener from "@/components/notification-listener";
 import { Toaster } from "@/components/ui/sonner";
+import { ModalProvider } from "@/components/providers/modal-provider";
+import { LiveKitProvider } from "@/components/providers/media-room-provider";
 
 // Force dynamic rendering for all pages
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const viewport: Viewport = {
@@ -26,12 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={cn(
-          "hubot-sans bg-white overflow-hidden",
-          "dark:bg-black"
-        )}
-      >
+      <body className="w-full h-screen bg-background">
         <Providers>
           <Toaster position="top-center" />
           {children}

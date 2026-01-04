@@ -5,6 +5,9 @@ import type { Notification as INotification } from "@novu/react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { useModal } from "@/hooks/use-modal-store";
+import { usePathname } from "next/navigation";
+import { useAuthStore } from "@/lib/auth-store";
+import axios from "axios";
 
 type AppNotificationPayload =
   | {
@@ -28,6 +31,8 @@ type NotificationWithPayload = INotification & {
 function NotificationListener() {
   const novu = useNovu();
   const { onOpen } = useModal();
+  const pathname = usePathname();
+  const { user } = useAuthStore();
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -70,6 +75,44 @@ function NotificationListener() {
           },
         });
         return; // Don't show toast for call notifications
+      }
+
+      // Check if the user is currently viewing the channel/conversation where the message was sent
+      // If the sender is the current user and they're viewing that channel, skip notification
+      const isSender = payload?.senderUserId === user?.userId;
+      let isViewingChannel = false;
+
+      if (isSender) {
+        // Check if user is viewing the conversation/channel
+        if (payload?.conversationId) {
+          // Check if pathname matches conversation route
+          isViewingChannel = pathname === `/conversations/${payload.conversationId}`;
+        } else if (payload?.channelId) {
+          // For channel messages, check if pathname matches channel route
+          // Pathname format: /servers/[serverId]/channels/[channelId]
+          isViewingChannel = pathname?.includes(`/channels/${payload.channelId}`) || false;
+        }
+
+        if (isViewingChannel) {
+          // User is viewing the channel and sent the message - auto-archive the notification
+          try {
+            // Mark notification as read/archived on Novu
+            // Use the Novu API to mark the notification as read
+            if (result.id && user?.userId) {
+              const response = await axios.post(`/api/notifications/mark-read`, {
+                notificationId: result.id,
+                subscriberId: user.userId,
+              });
+              
+              if (response.status === 200) {
+                console.log("Notification auto-archived - user is viewing the channel");
+              }
+            }
+          } catch (error) {
+            console.error("Failed to archive notification:", error);
+          }
+          return; // Don't show toast notification
+        }
       }
 
       const title = result.subject || "New Notification";
@@ -127,7 +170,7 @@ function NotificationListener() {
       novu.off("notifications.notification_received", handleNewNotification);
       novu.off("notifications.unread_count_changed", handleUnreadCountChanged);
     };
-  }, [novu, onOpen]);
+  }, [novu, onOpen, pathname, user?.userId]);
 
   return null; // This component doesn't render anything
 }
