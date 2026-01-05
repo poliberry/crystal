@@ -275,6 +275,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const setScreenshareVolume = (trackSid: string, volume: number) => {
     // Clamp volume between 0 and 0.5
     const clampedVolume = Math.max(0, Math.min(0.5, volume));
+    
     // Update state
     setScreenshareVolumes((prev) => {
       // Only update if different to avoid unnecessary re-renders
@@ -283,23 +284,40 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
       }
       return { ...prev, [trackSid]: clampedVolume };
     });
-    // Update audio element volume immediately (don't wait for useEffect)
+    
+    // Update audio element volume immediately - find all audio elements that might be playing this track
     const audioEl = audioElementRefs.current[`screenshare-${trackSid}`];
     if (audioEl) {
-      // Set volume (0 to 0.5 range)
       audioEl.volume = clampedVolume;
-      // If volume is 0, mute it (unless it's already muted for being local - preserve that)
-      // If volume > 0 and it was muted only because volume was 0, unmute it
-      // But if it's muted because it's local, keep it muted
-      const wasMutedForVolume = audioEl.volume === 0;
+      // Mute if volume is 0 (local check will be handled by useEffect)
       if (clampedVolume === 0) {
         audioEl.muted = true;
-      } else if (wasMutedForVolume) {
-        // Only unmute if it was muted for volume, not for being local
-        // We'll let the useEffect handle the local check
-        audioEl.muted = false;
       }
     }
+    
+    // Also update any other audio elements that might be playing this screenshare audio
+    // Find all audio elements and check if they're playing screenshare audio
+    setTimeout(() => {
+      const allAudioElements = document.querySelectorAll('audio');
+      allAudioElements.forEach((el: HTMLAudioElement) => {
+        if (el.srcObject && el.srcObject instanceof MediaStream) {
+          const audioTracks = el.srcObject.getAudioTracks();
+          // Check if this audio element is playing a screenshare audio track
+          // We'll update it if the volume state matches
+          const currentVolume = screenshareVolumes[trackSid];
+          if (currentVolume !== undefined && audioTracks.length > 0) {
+            // Update volume for any screenshare audio
+            el.volume = clampedVolume;
+            if (clampedVolume === 0) {
+              el.muted = true;
+            } else if (el.muted && clampedVolume > 0) {
+              // Only unmute if it was muted for volume, not for being local
+              // The useEffect will handle the local check
+            }
+          }
+        }
+      });
+    }, 0);
   };
 
   // Sync volume changes to audio elements
@@ -1320,24 +1338,16 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                           .map(track => {
                             const isLocalScreenshare = track.participant.identity === localParticipant.identity;
                             const trackSid = activeScreenShare.publication.trackSid;
+                            const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
                             return (
-                              <audio
+                              <ScreenshareAudioElement
                                 key={track.publication.trackSid}
-                                autoPlay
-                                playsInline
-                                muted={isLocalScreenshare}
-                                ref={el => {
-                                  if (el && track.publication.track?.kind === "audio") {
-                                    audioElementRefs.current[`screenshare-${trackSid}`] = el;
-                                    track.publication.track.attach(el);
-                                    // Get current volume from state (not closure)
-                                    const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
-                                    const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
-                                    el.volume = clampedVolume;
-                                    // Mute if volume is 0 OR if it's local screenshare
-                                    el.muted = clampedVolume === 0 || isLocalScreenshare;
-                                  }
-                                }}
+                                track={track}
+                                trackSid={trackSid}
+                                volume={currentVolume}
+                                isLocalScreenshare={isLocalScreenshare}
+                                audioElementRefs={audioElementRefs}
+                                screenshareVolumes={screenshareVolumes}
                               />
                             );
                           })}
@@ -1512,24 +1522,16 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                     )
                                     .map(audioTrack => {
                                       const trackSid = track.publication.trackSid;
+                                      const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
                                       return (
-                                        <audio
+                                        <ScreenshareAudioElement
                                           key={audioTrack.publication.trackSid}
-                                          ref={(el) => {
-                                            if (el && audioTrack.publication.track?.kind === "audio") {
-                                              audioElementRefs.current[`screenshare-${trackSid}`] = el;
-                                              audioTrack.publication.track.attach(el);
-                                              // Get current volume from state (not closure)
-                                              const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
-                                              const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
-                                              el.volume = clampedVolume;
-                                              // Mute if volume is 0 OR if it's local screenshare
-                                              el.muted = clampedVolume === 0 || isLocalScreenshare;
-                                            }
-                                          }}
-                                          autoPlay
-                                          playsInline
-                                          muted={isLocalScreenshare}
+                                          track={audioTrack}
+                                          trackSid={trackSid}
+                                          volume={currentVolume}
+                                          isLocalScreenshare={isLocalScreenshare}
+                                          audioElementRefs={audioElementRefs}
+                                          screenshareVolumes={screenshareVolumes}
                                         />
                                       );
                                     })}
@@ -1722,24 +1724,13 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                         <TrackRefVideoCard trackRef={track} />
                                         {/* Audio element for screenshare audio (separate from mic) */}
                                         {screenshareAudioTrack && screenshareAudioTrack.publication.track?.kind === "audio" && !isLocalScreenshare && (
-                                          <audio
-                                            ref={(el) => {
-                                              if (el && screenshareAudioTrack.publication.track) {
-                                                const trackSid = track.publication.trackSid;
-                                                audioElementRefs.current[`screenshare-${trackSid}`] = el;
-                                                screenshareAudioTrack.publication.track.attach(el);
-                                                // Get current volume from state (not closure)
-                                                const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
-                                                const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
-                                                el.volume = clampedVolume;
-                                                // Mute if volume is 0 OR if it's local screenshare
-                                                el.muted = clampedVolume === 0 || isLocalScreenshare;
-                                              }
-                                            }}
-                      
-                                            autoPlay
-                                            playsInline
-                                            muted={isLocalScreenshare}
+                                          <ScreenshareAudioElement
+                                            track={screenshareAudioTrack}
+                                            trackSid={track.publication.trackSid}
+                                            volume={volume}
+                                            isLocalScreenshare={isLocalScreenshare}
+                                            audioElementRefs={audioElementRefs}
+                                            screenshareVolumes={screenshareVolumes}
                                           />
                                         )}
                                       </>
@@ -2179,6 +2170,56 @@ function ActiveParticipantCard({
         </div>
       </div>
     </div>
+  );
+}
+
+// Screenshare Audio Element Component - handles volume updates properly
+function ScreenshareAudioElement({
+  track,
+  trackSid,
+  volume,
+  isLocalScreenshare,
+  audioElementRefs,
+  screenshareVolumes,
+}: {
+  track: TrackReference;
+  trackSid: string;
+  volume: number;
+  isLocalScreenshare: boolean;
+  audioElementRefs: React.MutableRefObject<Record<string, HTMLAudioElement>>;
+  screenshareVolumes: Record<string, number>;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Always read current volume from state
+  const currentVolume = screenshareVolumes[trackSid] ?? volume;
+  const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
+
+  // Update volume whenever screenshareVolumes changes
+  useEffect(() => {
+    if (audioRef.current) {
+      const latestVolume = screenshareVolumes[trackSid] ?? volume;
+      const latestClamped = Math.max(0, Math.min(0.5, latestVolume));
+      audioRef.current.volume = latestClamped;
+      audioRef.current.muted = latestClamped === 0 || isLocalScreenshare;
+    }
+  }, [screenshareVolumes, trackSid, volume, isLocalScreenshare]);
+
+  return (
+    <audio
+      ref={(el) => {
+        audioRef.current = el;
+        if (el && track.publication.track) {
+          track.publication.track.attach(el);
+          audioElementRefs.current[`screenshare-${trackSid}`] = el;
+          // Set initial volume
+          el.volume = clampedVolume;
+          el.muted = clampedVolume === 0 || isLocalScreenshare;
+        }
+      }}
+      autoPlay
+      playsInline
+      muted={isLocalScreenshare}
+    />
   );
 }
 
