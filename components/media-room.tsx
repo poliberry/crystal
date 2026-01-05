@@ -274,8 +274,15 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const setScreenshareVolume = (trackSid: string, volume: number) => {
     // Clamp volume between 0 and 0.5
     const clampedVolume = Math.max(0, Math.min(0.5, volume));
-    setScreenshareVolumes((prev) => ({ ...prev, [trackSid]: clampedVolume }));
-    // Update audio element volume immediately
+    // Update state
+    setScreenshareVolumes((prev) => {
+      // Only update if different to avoid unnecessary re-renders
+      if (prev[trackSid] === clampedVolume) {
+        return prev;
+      }
+      return { ...prev, [trackSid]: clampedVolume };
+    });
+    // Update audio element volume immediately (don't wait for useEffect)
     const audioEl = audioElementRefs.current[`screenshare-${trackSid}`];
     if (audioEl) {
       audioEl.volume = clampedVolume;
@@ -1185,15 +1192,23 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     Track.Source.ScreenShareAudio,
   ]);
 
-  // Initialize default screenshare volumes to 0.5
+  // Initialize default screenshare volumes to 0.5 (only once per track)
   useEffect(() => {
     const screenshareTracks = allTracks.filter(
       (t) => t.publication.source === Track.Source.ScreenShare
     );
-    screenshareTracks.forEach((track) => {
-      if (!screenshareVolumes[track.publication.trackSid]) {
-        setScreenshareVolumes((prev) => ({ ...prev, [track.publication.trackSid]: 0.5 }));
-      }
+    setScreenshareVolumes((prev) => {
+      let updated = false;
+      const newVolumes = { ...prev };
+      screenshareTracks.forEach((track) => {
+        const trackSid = track.publication.trackSid;
+        // Only set default if not already set (don't overwrite user changes)
+        if (newVolumes[trackSid] === undefined) {
+          newVolumes[trackSid] = 0.5;
+          updated = true;
+        }
+      });
+      return updated ? newVolumes : prev;
     });
   }, [allTracks]);
 
@@ -1209,7 +1224,10 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         const isLocalScreenshare = track?.participant.identity === localParticipant.identity;
         // Clamp volume between 0 and 0.5
         const clampedVolume = Math.max(0, Math.min(0.5, volume));
-        audioEl.volume = clampedVolume;
+        // Force update the volume - this ensures it actually changes
+        if (audioEl.volume !== clampedVolume) {
+          audioEl.volume = clampedVolume;
+        }
         audioEl.muted = isLocalScreenshare; // Always mute local screenshare audio
       }
     });
@@ -1289,7 +1307,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                           )
                           .map(track => {
                             const isLocalScreenshare = track.participant.identity === localParticipant.identity;
-                            const volume = screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5;
+                            const trackSid = activeScreenShare.publication.trackSid;
                             return (
                               <audio
                                 key={track.publication.trackSid}
@@ -1298,10 +1316,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                 muted={isLocalScreenshare}
                                 ref={el => {
                                   if (el && track.publication.track?.kind === "audio") {
-                                    audioElementRefs.current[`screenshare-${activeScreenShare.publication.trackSid}`] = el;
+                                    audioElementRefs.current[`screenshare-${trackSid}`] = el;
                                     track.publication.track.attach(el);
-                                    // Set volume and muted after attachment - clamp to 0-0.5 range
-                                    const clampedVolume = Math.max(0, Math.min(0.5, volume));
+                                    // Get current volume from state (not closure)
+                                    const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
+                                    const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
                                     el.volume = clampedVolume;
                                     el.muted = isLocalScreenshare;
                                   }
@@ -1465,16 +1484,17 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                       t.participant.identity === track.participant.identity
                                     )
                                     .map(audioTrack => {
-                                      const volume = screenshareVolumes[track.publication.trackSid] ?? 0.5;
+                                      const trackSid = track.publication.trackSid;
                                       return (
                                         <audio
                                           key={audioTrack.publication.trackSid}
                                           ref={(el) => {
                                             if (el && audioTrack.publication.track?.kind === "audio") {
-                                              audioElementRefs.current[`screenshare-${track.publication.trackSid}`] = el;
+                                              audioElementRefs.current[`screenshare-${trackSid}`] = el;
                                               audioTrack.publication.track.attach(el);
-                                              // Clamp volume to 0-0.5 range
-                                              const clampedVolume = Math.max(0, Math.min(0.5, volume));
+                                              // Get current volume from state (not closure)
+                                              const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
+                                              const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
                                               el.volume = clampedVolume;
                                               el.muted = isLocalScreenshare;
                                             }
@@ -1677,14 +1697,17 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                           <audio
                                             ref={(el) => {
                                               if (el && screenshareAudioTrack.publication.track) {
-                                                audioElementRefs.current[`screenshare-${track.publication.trackSid}`] = el;
+                                                const trackSid = track.publication.trackSid;
+                                                audioElementRefs.current[`screenshare-${trackSid}`] = el;
                                                 screenshareAudioTrack.publication.track.attach(el);
-                                                // Set volume and muted after attachment - clamp to 0-0.5 range
-                                                const clampedVolume = Math.max(0, Math.min(0.5, volume));
+                                                // Get current volume from state (not closure)
+                                                const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
+                                                const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
                                                 el.volume = clampedVolume;
                                                 el.muted = isLocalScreenshare;
                                               }
                                             }}
+                      
                                             autoPlay
                                             playsInline
                                             muted={isLocalScreenshare}
