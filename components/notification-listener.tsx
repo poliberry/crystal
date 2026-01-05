@@ -205,7 +205,7 @@ function NotificationListener() {
       novu.off("notifications.notification_received", handleNewNotification);
       novu.off("notifications.unread_count_changed", handleUnreadCountChanged);
     };
-  }, [novu, onOpen, pathname, user?.userId, tauriNotification]);
+  }, [novu, onOpen, pathname, user?.userId]);
 
   return null; // This component doesn't render anything
 }

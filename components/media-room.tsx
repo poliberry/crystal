@@ -115,7 +115,6 @@ declare global {
   }
 }
 
-import { useUser } from "@clerk/nextjs";
 import {
   ControlBar,
   LiveKitRoom,
@@ -133,15 +132,19 @@ import {
   Camera,
   CameraOff,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   Mic,
   MicOff,
   MonitorDown,
   MonitorUp,
   Phone,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 import "@livekit/components-styles";
 import { FloatingCallCard } from "./call-ui";
@@ -208,6 +211,19 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  
+  // Volume controls state
+  const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
+  const [screenshareVolumes, setScreenshareVolumes] = useState<Record<string, number>>({});
+  
+  // Screenshare subscription state (opt-in viewing)
+  const [subscribedScreenshares, setSubscribedScreenshares] = useState<Set<string>>(new Set());
+  
+  // Pagination state for gallery grid
+  const [currentPage, setCurrentPage] = useState(0);
+  
+  // Audio element refs for volume control
+  const audioElementRefs = useRef<Record<string, HTMLAudioElement>>({});
 
   useEffect(() => {
     navigator.mediaDevices.enumerateDevices().then((devices) => {
@@ -216,6 +232,66 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
       setCameraDevices(devices.filter((d) => d.kind === "videoinput"));
     });
   }, []);
+
+  // Initialize default volumes
+  useEffect(() => {
+    const allParticipants = [localParticipant, ...remoteParticipants];
+    allParticipants.forEach((participant) => {
+      if (participant && !userVolumes[participant.identity]) {
+        setUserVolumes((prev) => ({ ...prev, [participant.identity]: 1.0 }));
+      }
+    });
+  }, [remoteParticipants, localParticipant]);
+
+
+  // Calculate gallery grid layout
+  const calculateGridLayout = (totalItems: number) => {
+    if (totalItems === 0) return { cols: 1, rows: 1 };
+    if (totalItems === 1) return { cols: 1, rows: 1 };
+    if (totalItems === 2) return { cols: 2, rows: 1 };
+    if (totalItems <= 4) return { cols: 2, rows: 2 };
+    if (totalItems <= 6) return { cols: 3, rows: 2 };
+    if (totalItems <= 9) return { cols: 3, rows: 3 };
+    if (totalItems <= 12) return { cols: 4, rows: 3 };
+    if (totalItems <= 16) return { cols: 4, rows: 4 };
+    if (totalItems <= 20) return { cols: 5, rows: 4 };
+    if (totalItems <= 25) return { cols: 5, rows: 5 };
+    // For more than 25, use pagination with 5x5 grid
+    return { cols: 5, rows: 5 };
+  };
+
+  // Volume control functions
+  const setUserVolume = (participantId: string, volume: number) => {
+    setUserVolumes((prev) => ({ ...prev, [participantId]: volume }));
+    const audioEl = audioElementRefs.current[`user-${participantId}`];
+    if (audioEl) {
+      audioEl.volume = volume;
+    }
+  };
+
+  const setScreenshareVolume = (trackSid: string, volume: number) => {
+    setScreenshareVolumes((prev) => ({ ...prev, [trackSid]: volume }));
+    const audioEl = audioElementRefs.current[`screenshare-${trackSid}`];
+    if (audioEl) {
+      audioEl.volume = volume;
+    }
+  };
+
+  // Screenshare subscription functions
+  const subscribeToScreenshare = (trackSid: string) => {
+    setSubscribedScreenshares((prev) => new Set([...prev, trackSid]));
+  };
+
+  const unsubscribeFromScreenshare = (trackSid: string) => {
+    setSubscribedScreenshares((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(trackSid);
+      return newSet;
+    });
+    if (activeScreenShare?.publication.trackSid === trackSid) {
+      setActiveScreenShare(null);
+    }
+  };
 
   const handleSelectInput = async (deviceId: string) => {
     localParticipant.activeDeviceMap.set("audioinput", deviceId);
@@ -1092,6 +1168,27 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     Track.Source.ScreenShareAudio,
   ]);
 
+  // Clean up subscriptions when screenshares end
+  useEffect(() => {
+    const currentScreenshareTrackSids = new Set(
+      allTracks
+        .filter((t) => t.publication.source === Track.Source.ScreenShare)
+        .map((t) => t.publication.trackSid)
+    );
+
+    setSubscribedScreenshares((prev) => {
+      const newSet = new Set(prev);
+      let changed = false;
+      prev.forEach((trackSid) => {
+        if (!currentScreenshareTrackSids.has(trackSid)) {
+          newSet.delete(trackSid);
+          changed = true;
+        }
+      });
+      return changed ? newSet : prev;
+    });
+  }, [allTracks]);
+
   // Filter for screen shares only
   const screenShareTracks = allTracks
     .filter((t) => t.publication.source === Track.Source.ScreenShare)
@@ -1137,24 +1234,32 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         }}
                       >
                         <VideoRenderer trackRef={activeScreenShare} />
-                        {/* Add audio renderer for screen share audio */}
+                        {/* Add audio renderer for screen share audio - separate from mic, muted for local screensharer */}
                         {allTracks
                           .filter(track => 
                             track.publication.source === Track.Source.ScreenShareAudio &&
                             track.participant.identity === activeScreenShare.participant.identity
                           )
-                          .map(track => (
-                            <audio
-                              key={track.publication.trackSid}
-                              autoPlay
-                              playsInline
-                              ref={el => {
-                                if (el && track.publication.track?.kind === "audio") {
-                                  track.publication.track.attach(el);
-                                }
-                              }}
-                            />
-                          ))}
+                          .map(track => {
+                            const isLocalScreenshare = track.participant.identity === localParticipant.identity;
+                            const volume = screenshareVolumes[activeScreenShare.publication.trackSid] ?? 1.0;
+                            return (
+                              <audio
+                                key={track.publication.trackSid}
+                                autoPlay
+                                playsInline
+                                muted={isLocalScreenshare}
+                                ref={el => {
+                                  if (el && track.publication.track?.kind === "audio") {
+                                    el.volume = volume;
+                                    el.muted = isLocalScreenshare;
+                                    audioElementRefs.current[`screenshare-${activeScreenShare.publication.trackSid}`] = el;
+                                    track.publication.track.attach(el);
+                                  }
+                                }}
+                              />
+                            );
+                          })}
                         <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 bg-black bg-opacity-50 text-white px-2 sm:px-3 py-1 sm:py-2 rounded">
                           <div className="flex items-center gap-1 sm:gap-2">
                             <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1164,6 +1269,23 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                               <Badge variant="destructive">LIVE</Badge>
                             </span>
                           </div>
+                        </div>
+                        {/* Volume control for active screenshare */}
+                        <div className="absolute top-2 right-2 bg-black/70 rounded-lg p-2 flex items-center gap-2">
+                          <Volume2 className="w-4 h-4 text-white" />
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={screenshareVolumes[activeScreenShare.publication.trackSid] ?? 1.0}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setScreenshareVolume(activeScreenShare.publication.trackSid, parseFloat(e.target.value));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-20 h-1"
+                          />
                         </div>
                       </div>
                     </div>
@@ -1261,12 +1383,16 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                           const isActiveScreenShare =
                             activeScreenShare?.publication.trackSid ===
                             track.publication.trackSid;
+                          const isSubscribed = subscribedScreenshares.has(track.publication.trackSid);
+                          const isLocalScreenshare = track.participant.identity === localParticipant.identity;
 
                           return (
                             <div
                               key={`screenshare-${track.publication.trackSid}`}
                               onClick={() => {
-                                if (isActiveScreenShare) {
+                                if (!isSubscribed) {
+                                  subscribeToScreenshare(track.publication.trackSid);
+                                } else if (isActiveScreenShare) {
                                   setActiveScreenShare(null);
                                 } else {
                                   setActiveScreenShare(track);
@@ -1279,7 +1405,36 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                 isActiveScreenShare && "opacity-60"
                               )}
                             >
-                              <TrackRefVideoCard trackRef={track} />
+                              {isSubscribed ? (
+                                <>
+                                  <TrackRefVideoCard trackRef={track} />
+                                  {/* Audio for screenshare (muted for local) */}
+                                  {allTracks
+                                    .filter(t => 
+                                      t.publication.source === Track.Source.ScreenShareAudio &&
+                                      t.participant.identity === track.participant.identity
+                                    )
+                                    .map(audioTrack => (
+                                      <audio
+                                        key={audioTrack.publication.trackSid}
+                                        ref={(el) => {
+                                          if (el && audioTrack.publication.track?.kind === "audio") {
+                                            el.muted = isLocalScreenshare;
+                                            audioTrack.publication.track.attach(el);
+                                          }
+                                        }}
+                                        autoPlay
+                                        playsInline
+                                        muted={isLocalScreenshare}
+                                      />
+                                    ))}
+                                </>
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-background/80">
+                                  <MonitorUp className="w-6 h-6 text-blue-500 mb-1" />
+                                  <span className="text-xs text-center px-1">Click to view</span>
+                                </div>
+                              )}
 
                               {/* Active Screen Share Indicator - Responsive */}
                               {isActiveScreenShare && (
@@ -1304,102 +1459,256 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                     </div>
                   </div>
                 ) : (
-                  // Responsive grid when no active view
-                  <div className="h-full overflow-y-auto overflow-x-hidden pb-2 sm:pb-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 justify-items-center py-2 sm:py-4 px-2 sm:px-4">
-                      {/* Participant Cards - Responsive */}
-                      {participants.map((participant) => {
-                        const metadata = safeParseMetadata(
-                          participant.metadata
-                        );
-                        const avatar =
-                          metadata?.avatar ?? "/default-avatar.png";
-                        const name = participant.name || participant.identity;
-                        const speaking = participant.isSpeaking;
+                  // Gallery grid layout with pagination
+                  (() => {
+                    // Combine participants and subscribed screenshares
+                    const allCards = [
+                      ...participants.map((p) => ({ type: 'participant' as const, data: p })),
+                      ...allTracks
+                        .filter((t) => t.publication.source === Track.Source.ScreenShare)
+                        .filter((t) => subscribedScreenshares.has(t.publication.trackSid))
+                        .map((t) => ({ type: 'screenshare' as const, data: t })),
+                    ];
 
-                        // Find camera track if published
-                        const cameraTrack = allTracks.find(
-                          (t) =>
-                            t.participant.identity === participant.identity &&
-                            t.publication.source === Track.Source.Camera &&
-                            !t.publication.isMuted
-                        );
+                    const totalCards = allCards.length;
+                    const gridLayout = calculateGridLayout(totalCards);
+                    const itemsPerPage = gridLayout.cols * gridLayout.rows;
+                    const totalPages = Math.ceil(totalCards / itemsPerPage);
+                    const startIndex = currentPage * itemsPerPage;
+                    const endIndex = Math.min(startIndex + itemsPerPage, totalCards);
+                    const currentPageCards = allCards.slice(startIndex, endIndex);
 
-                        return (
+                    return (
+                      <div className="h-full flex flex-col overflow-hidden">
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden pb-2 sm:pb-4">
                           <div
-                            key={participant.identity}
-                            className={cn(
-                              "relative rounded-lg overflow-hidden p-1 border-2 bg-background cursor-pointer transition-all duration-200 ease-in-out",
-                              "w-72 h-44 sm:w-80 sm:h-48", // Responsive sizing
-                              speaking
-                                ? "border-green-500 shadow-md shadow-green-500/30"
-                                : "border-white dark:border-zinc-800"
-                            )}
-                            onClick={() => {
-                              setActiveParticipant(participant);
-                              setActiveScreenShare(null);
+                            className="grid gap-2 sm:gap-4 py-2 sm:py-4 px-2 sm:px-4 h-full"
+                            style={{
+                              gridTemplateColumns: `repeat(${gridLayout.cols}, minmax(0, 1fr))`,
+                              gridTemplateRows: `repeat(${gridLayout.rows}, minmax(0, 1fr))`,
                             }}
                           >
-                            {cameraTrack ? (
-                              <VideoRenderer trackRef={cameraTrack} />
-                            ) : (
-                              <div className="w-full h-full flex flex-col items-center justify-center bg-background">
-                                <img
-                                  src={avatar}
-                                  alt={name}
-                                  className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full transition-all duration-200"
-                                />
-                              </div>
-                            )}
+                            {currentPageCards.map((card, index) => {
+                              if (card.type === 'participant') {
+                                const participant = card.data;
+                                const metadata = safeParseMetadata(participant.metadata);
+                                const avatar = metadata?.avatar ?? "/default-avatar.png";
+                                const name = participant.name || participant.identity;
+                                const speaking = participant.isSpeaking;
+                                const volume = userVolumes[participant.identity] ?? 1.0;
 
-                            <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
-                              <div className="flex items-center gap-1">
-                                {!participant.isMicrophoneEnabled ? (
-                                  <MicOff className="w-4 h-4 flex-shrink-0" />
-                                ) : null}
-                                <span className="text-sm truncate">{name}</span>
-                              </div>
-                            </div>
+                                const cameraTrack = allTracks.find(
+                                  (t) =>
+                                    t.participant.identity === participant.identity &&
+                                    t.publication.source === Track.Source.Camera &&
+                                    !t.publication.isMuted
+                                );
+
+                                // Find microphone track for audio
+                                const micTrack = allTracks.find(
+                                  (t) =>
+                                    t.participant.identity === participant.identity &&
+                                    t.publication.source === Track.Source.Microphone &&
+                                    !t.publication.isMuted
+                                );
+
+                                return (
+                                  <div
+                                    key={participant.identity}
+                                    className={cn(
+                                      "relative rounded-lg overflow-hidden border-2 bg-background cursor-pointer transition-all duration-200 ease-in-out group",
+                                      speaking
+                                        ? "border-green-500 shadow-md shadow-green-500/30"
+                                        : "border-white dark:border-zinc-800"
+                                    )}
+                                    onClick={() => {
+                                      setActiveParticipant(participant);
+                                      setActiveScreenShare(null);
+                                    }}
+                                  >
+                                    {cameraTrack ? (
+                                      <VideoRenderer trackRef={cameraTrack} />
+                                    ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center bg-background">
+                                        <img
+                                          src={avatar}
+                                          alt={name}
+                                          className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full transition-all duration-200"
+                                        />
+                                      </div>
+                                    )}
+
+                                    {/* Audio element for volume control */}
+                                    {micTrack && micTrack.publication.track?.kind === "audio" && (
+                                      <audio
+                                        ref={(el) => {
+                                          if (el && micTrack.publication.track) {
+                                            audioElementRefs.current[`user-${participant.identity}`] = el;
+                                            el.volume = volume;
+                                            micTrack.publication.track.attach(el);
+                                          }
+                                        }}
+                                        autoPlay
+                                        playsInline
+                                      />
+                                    )}
+
+                                    {/* Volume control */}
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <div className="bg-black/70 rounded-lg p-1 flex items-center gap-1">
+                                        <Volume2 className="w-3 h-3 text-white" />
+                                        <input
+                                          type="range"
+                                          min="0"
+                                          max="1"
+                                          step="0.01"
+                                          value={volume}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            setUserVolume(participant.identity, parseFloat(e.target.value));
+                                          }}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="w-16 h-1"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
+                                      <div className="flex items-center gap-1">
+                                        {!participant.isMicrophoneEnabled ? (
+                                          <MicOff className="w-4 h-4 flex-shrink-0" />
+                                        ) : null}
+                                        <span className="text-sm truncate">{name}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              } else {
+                                const track = card.data;
+                                const isSubscribed = subscribedScreenshares.has(track.publication.trackSid);
+                                const volume = screenshareVolumes[track.publication.trackSid] ?? 1.0;
+                                const isLocalScreenshare = track.participant.identity === localParticipant.identity;
+
+                                // Find screenshare audio track
+                                const screenshareAudioTrack = allTracks.find(
+                                  (t) =>
+                                    t.publication.source === Track.Source.ScreenShareAudio &&
+                                    t.participant.identity === track.participant.identity
+                                );
+
+                                return (
+                                  <div
+                                    key={`screenshare-${track.publication.trackSid}`}
+                                    className={cn(
+                                      "relative rounded-lg overflow-hidden border-2 border-blue-500 shadow-md cursor-pointer bg-background transition-all duration-200 ease-in-out group"
+                                    )}
+                                    onClick={() => {
+                                      if (isSubscribed) {
+                                        setActiveScreenShare(track);
+                                        setActiveParticipant(null);
+                                      }
+                                    }}
+                                  >
+                                    {isSubscribed ? (
+                                      <>
+                                        <TrackRefVideoCard trackRef={track} />
+                                        {/* Audio element for screenshare audio (separate from mic) */}
+                                        {screenshareAudioTrack && screenshareAudioTrack.publication.track?.kind === "audio" && !isLocalScreenshare && (
+                                          <audio
+                                            ref={(el) => {
+                                              if (el && screenshareAudioTrack.publication.track) {
+                                                audioElementRefs.current[`screenshare-${track.publication.trackSid}`] = el;
+                                                el.volume = volume;
+                                                el.muted = isLocalScreenshare;
+                                                screenshareAudioTrack.publication.track.attach(el);
+                                              }
+                                            }}
+                                            autoPlay
+                                            playsInline
+                                            muted={isLocalScreenshare}
+                                          />
+                                        )}
+                                      </>
+                                    ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center bg-background/80">
+                                        <MonitorUp className="w-12 h-12 text-blue-500 mb-2" />
+                                        <Button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            subscribeToScreenshare(track.publication.trackSid);
+                                          }}
+                                          className="mt-2"
+                                        >
+                                          View Screenshare
+                                        </Button>
+                                      </div>
+                                    )}
+
+                                    {/* Volume control */}
+                                    {isSubscribed && (
+                                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="bg-black/70 rounded-lg p-1 flex items-center gap-1">
+                                          <Volume2 className="w-3 h-3 text-white" />
+                                          <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.01"
+                                            value={volume}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              setScreenshareVolume(track.publication.trackSid, parseFloat(e.target.value));
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="w-16 h-1"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
+                                      <div className="flex items-center gap-1">
+                                        <MonitorUp className="w-4 h-4 flex-shrink-0" />
+                                        <span className="text-sm truncate">
+                                          {track.participant.name || track.participant.identity}{" "}
+                                          <Badge variant="destructive">LIVE</Badge>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            })}
                           </div>
-                        );
-                      })}
+                        </div>
 
-                      {/* Screen Share Cards - Responsive */}
-                      {allTracks
-                        .filter(
-                          (t) =>
-                            t.publication.source === Track.Source.ScreenShare
-                        )
-                        .map((track) => {
-                          return (
-                            <div
-                              key={`screenshare-${track.publication.trackSid}`}
-                              onClick={() => {
-                                setActiveScreenShare(track);
-                                setActiveParticipant(null);
-                              }}
-                              className={cn(
-                                "rounded-lg overflow-hidden border-2 border-blue-500 shadow-md cursor-pointer relative bg-background transition-all duration-200 ease-in-out",
-                                "w-72 h-44 sm:w-80 sm:h-48" // Responsive sizing
-                              )}
+                        {/* Pagination controls */}
+                        {totalPages > 1 && (
+                          <div className="flex items-center justify-center gap-2 py-2 border-t">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                              disabled={currentPage === 0}
                             >
-                              <TrackRefVideoCard trackRef={track} />
-
-                              <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
-                                <div className="flex items-center gap-1">
-                                  <MonitorUp className="w-4 h-4 flex-shrink-0" />
-                                  <span className="text-sm truncate">
-                                    {track.participant.name ||
-                                      track.participant.identity}{" "}
-                                    <Badge variant="destructive">LIVE</Badge>
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
+                              <ChevronLeft className="w-4 h-4" />
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                              Page {currentPage + 1} of {totalPages}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                              disabled={currentPage >= totalPages - 1}
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
 
@@ -1441,11 +1750,12 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         </Button>
                       )}
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                        <DropdownMenuTrigger>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="p-1.5 sm:p-2 rounded-none group-hover:bg-muted rounded-r-lg"
+                            type="button"
                           >
                             <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
@@ -1453,10 +1763,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         <DropdownMenuContent>
                           <DropdownMenuLabel>Microphone</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {inputDevices.map((device) => (
+                          {inputDevices.map((device, index) => (
                             <DropdownMenuItem
-                              key={device.deviceId}
-                              onClick={() => {
+                              key={`input-${device.deviceId}-${index}`}
+                              onSelect={(e) => {
+                                e.preventDefault();
                                 handleSelectInput(device.deviceId);
                               }}
                             >
@@ -1466,10 +1777,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                           <DropdownMenuSeparator />
                           <DropdownMenuLabel>Speaker</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {outputDevices.map((device) => (
+                          {outputDevices.map((device, index) => (
                             <DropdownMenuItem
-                              key={device.deviceId}
-                              onClick={() => {
+                              key={`output-${device.deviceId}-${index}`}
+                              onSelect={(e) => {
+                                e.preventDefault();
                                 handleSelectOutput(device.deviceId);
                               }}
                             >
@@ -1514,11 +1826,12 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         </Button>
                       )}
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                        <DropdownMenuTrigger>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="p-1.5 sm:p-2 rounded-none group-hover:bg-muted rounded-r-lg"
+                            type="button"
                           >
                             <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
@@ -1526,10 +1839,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         <DropdownMenuContent>
                           <DropdownMenuLabel>Camera</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {cameraDevices.map((device) => (
+                          {cameraDevices.map((device, index) => (
                             <DropdownMenuItem
-                              key={device.deviceId}
-                              onClick={() => {
+                              key={`camera-${device.deviceId}-${index}`}
+                              onSelect={(e) => {
+                                e.preventDefault();
                                 handleSelectCamera(device.deviceId);
                               }}
                             >
