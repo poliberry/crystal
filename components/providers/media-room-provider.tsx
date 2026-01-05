@@ -116,6 +116,7 @@ export const LiveKitProvider = ({
   const [roomId, setRoomId] = useState<string | null>(null);
   const [serverId, setServerId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [webrtcAvailable, setWebrtcAvailable] = useState<boolean | null>(null);
 
   const { user } = useAuthStore();
   const profile = useQuery(
@@ -124,6 +125,41 @@ export const LiveKitProvider = ({
   );
 
   const getToken = useAction(api.livekit.getToken);
+
+  // Check WebRTC availability before rendering LiveKitRoom
+  useEffect(() => {
+    const checkWebRTC = () => {
+      try {
+        // Check for RTCPeerConnection (standard or webkit prefix)
+        const hasRTCPeerConnection = 
+          typeof window !== "undefined" && 
+          (window.RTCPeerConnection || 
+           (window as any).webkitRTCPeerConnection ||
+           (window as any).mozRTCPeerConnection ||
+           (window as any).msRTCPeerConnection);
+        
+        // Check for getUserMedia
+        const hasGetUserMedia = 
+          typeof navigator !== "undefined" &&
+          (navigator.mediaDevices?.getUserMedia ||
+           (navigator as any).getUserMedia ||
+           (navigator as any).webkitGetUserMedia ||
+           (navigator as any).mozGetUserMedia);
+        
+        const available = !!(hasRTCPeerConnection && hasGetUserMedia);
+        setWebrtcAvailable(available);
+        
+        if (!available && isTauri) {
+          console.warn("WebRTC not fully available in Tauri/WebKit environment");
+        }
+      } catch (error) {
+        console.error("Error checking WebRTC availability:", error);
+        setWebrtcAvailable(false);
+      }
+    };
+    
+    checkWebRTC();
+  }, []);
 
   // Ensure WebRTC APIs are available (especially for WebKit/Tauri)
   useEffect(() => {
@@ -252,6 +288,43 @@ export const LiveKitProvider = ({
         dynacast: true,
       };
 
+  // Only render LiveKitRoom if WebRTC is available (or we haven't checked yet)
+  // If WebRTC is not available, show a fallback message
+  if (webrtcAvailable === false) {
+    return (
+      <LiveKitContext.Provider
+        value={{ 
+          join, 
+          joinConversation, 
+          leave, 
+          connected: false, 
+          serverName, 
+          roomName, 
+          roomType, 
+          roomId, 
+          serverId, 
+          conversationId 
+        }}
+      >
+        {isTauri ? (
+          <div className="p-4 bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 rounded">
+            <p className="text-yellow-800 dark:text-yellow-200">
+              WebRTC is not available in this Tauri/WebKit environment. 
+              Please ensure WebKitGTK 2.36+ is installed and WebRTC is enabled.
+            </p>
+          </div>
+        ) : (
+          <div className="p-4 bg-red-100 dark:bg-red-900 border border-red-400 rounded">
+            <p className="text-red-800 dark:text-red-200">
+              WebRTC is not supported in this browser. Please use a modern browser with WebRTC support.
+            </p>
+          </div>
+        )}
+        {children}
+      </LiveKitContext.Provider>
+    );
+  }
+
   return (
     <LiveKitContext.Provider
       value={{ 
@@ -267,29 +340,33 @@ export const LiveKitProvider = ({
         conversationId 
       }}
     >
-      <LiveKitRoom
-        token={token}
-        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
-        connect={connected}
-        video={video}
-        audio={audio}
-        options={roomOptions}
-        data-lk-theme={resolvedTheme === "dark" ? "default" : "light"}
-        onError={(error) => {
-          // Handle WebRTC detection errors gracefully for WebKit/Tauri
-          if (error.message?.includes("doesn't seem to be supported") || 
-              error.message?.includes("webRTC") ||
-              error.message?.includes("WebRTC")) {
-            console.warn("LiveKit WebRTC detection warning (may be false positive in WebKit):", error);
-            // Don't throw - allow connection to proceed as WebRTC might still work
-            return;
-          }
-          console.error("LiveKit error:", error);
-        }}
-      >
-        <RoomAudioRenderer />
-        {children}
-      </LiveKitRoom>
+      {webrtcAvailable !== false && (
+        <LiveKitRoom
+          token={token}
+          serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+          connect={connected}
+          video={video}
+          audio={audio}
+          options={roomOptions}
+          data-lk-theme={resolvedTheme === "dark" ? "default" : "light"}
+          onError={(error) => {
+            // Handle WebRTC detection errors gracefully for WebKit/Tauri
+            const errorMessage = error?.message?.toString() || error?.toString() || "";
+            if (errorMessage.includes("doesn't seem to be supported") || 
+                errorMessage.includes("webRTC") ||
+                errorMessage.includes("WebRTC")) {
+              console.warn("LiveKit WebRTC detection warning (may be false positive in WebKit):", error);
+              // Mark WebRTC as unavailable if we get this error
+              setWebrtcAvailable(false);
+              return;
+            }
+            console.error("LiveKit error:", error);
+          }}
+        >
+          <RoomAudioRenderer />
+          {children}
+        </LiveKitRoom>
+      )}
     </LiveKitContext.Provider>
   );
 };

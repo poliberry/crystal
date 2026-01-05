@@ -452,7 +452,8 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
           // This works when Electron's setDisplayMediaRequestHandler is configured
           // and xdg-desktop-portal supports audio capture
           try {
-            console.log('Attempting native PipeWire audio capture via getDisplayMedia...');
+            console.log('Attempting native PipeWire audio capture via getDisplayMedia...', { sourceId });
+            // Try with explicit audio request - Electron's handler will pass this to the portal
             const displayStream = await navigator.mediaDevices.getDisplayMedia({
               video: {
                 mandatory: {
@@ -465,7 +466,9 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                 noiseSuppression: false,
                 autoGainControl: false,
                 sampleRate: 48000,
-                channelCount: 2
+                channelCount: 2,
+                // Explicitly request system audio
+                systemAudio: 'include' as any
               } as any
             });
 
@@ -1815,7 +1818,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                       </div>
                                     )}
 
-                                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
+                                    <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1">
                                       <div className="flex items-center gap-1">
                                         <MonitorUp className="w-4 h-4 flex-shrink-0" />
                                         <span className="text-sm truncate">
@@ -1904,7 +1907,6 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                             variant="ghost"
                             size="sm"
                             className="p-1.5 sm:p-2 rounded-none group-hover:bg-muted rounded-r-lg"
-                            type="button"
                           >
                             <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
@@ -1980,7 +1982,6 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                             variant="ghost"
                             size="sm"
                             className="p-1.5 sm:p-2 rounded-none group-hover:bg-muted rounded-r-lg"
-                            type="button"
                           >
                             <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
