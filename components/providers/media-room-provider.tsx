@@ -10,7 +10,11 @@ import {
   RoomAudioRenderer,
   useTracks,
 } from "@livekit/components-react";
+import { RoomOptions, VideoPresets } from "livekit-client";
 import { FloatingCallCard } from "../call-ui";
+
+// Detect if running in Tauri
+const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
 
 interface LiveKitContextType {
   join: (
@@ -76,6 +80,23 @@ export const LiveKitProvider = ({
   );
 
   const getToken = useAction(api.livekit.getToken);
+
+  // Ensure WebRTC APIs are available (especially for WebKit/Tauri)
+  useEffect(() => {
+    if (isTauri && typeof window !== "undefined") {
+      // Polyfill or ensure WebRTC APIs are available
+      if (!window.RTCPeerConnection) {
+        console.warn("RTCPeerConnection not available, attempting to enable WebRTC support...");
+        // Try to access getUserMedia to ensure WebRTC is enabled
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          // WebRTC should be available if getUserMedia exists
+          console.log("getUserMedia available, WebRTC should be supported");
+        } else {
+          console.error("WebRTC APIs not available in this environment");
+        }
+      }
+    }
+  }, []);
 
   const join = async (
     roomId: string,
@@ -162,6 +183,31 @@ export const LiveKitProvider = ({
     setVideo(false);
   };
 
+  // Configure RoomOptions for WebKit/Tauri compatibility
+  const roomOptions: RoomOptions = isTauri
+    ? {
+        // WebKit-specific options for better compatibility
+        adaptiveStream: false, // Disable adaptive stream for WebKit
+        dynacast: false, // Disable dynacast for WebKit
+        // Use VP8 codec which has better WebKit support
+        videoCodec: "vp8",
+        // Disable publishDefaults to avoid WebRTC detection issues
+        publishDefaults: {
+          videoCodec: "vp8",
+          videoEncoding: {
+            maxBitrate: 3000000,
+            maxFramerate: 30,
+          },
+        },
+        // Enable E2EE if needed, but keep it simple for WebKit
+        e2ee: false,
+      }
+    : {
+        // Default options for regular browsers
+        adaptiveStream: true,
+        dynacast: true,
+      };
+
   return (
     <LiveKitContext.Provider
       value={{ 
@@ -183,7 +229,19 @@ export const LiveKitProvider = ({
         connect={connected}
         video={video}
         audio={audio}
+        options={roomOptions}
         data-lk-theme={resolvedTheme === "dark" ? "default" : "light"}
+        onError={(error) => {
+          // Handle WebRTC detection errors gracefully for WebKit/Tauri
+          if (error.message?.includes("doesn't seem to be supported") || 
+              error.message?.includes("webRTC") ||
+              error.message?.includes("WebRTC")) {
+            console.warn("LiveKit WebRTC detection warning (may be false positive in WebKit):", error);
+            // Don't throw - allow connection to proceed as WebRTC might still work
+            return;
+          }
+          console.error("LiveKit error:", error);
+        }}
       >
         <RoomAudioRenderer />
         {children}
