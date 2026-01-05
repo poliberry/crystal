@@ -244,6 +244,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   }, [remoteParticipants, localParticipant]);
 
 
+
   // Calculate gallery grid layout
   const calculateGridLayout = (totalItems: number) => {
     if (totalItems === 0) return { cols: 1, rows: 1 };
@@ -263,6 +264,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   // Volume control functions
   const setUserVolume = (participantId: string, volume: number) => {
     setUserVolumes((prev) => ({ ...prev, [participantId]: volume }));
+    // Update audio element volume immediately
     const audioEl = audioElementRefs.current[`user-${participantId}`];
     if (audioEl) {
       audioEl.volume = volume;
@@ -271,11 +273,24 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
 
   const setScreenshareVolume = (trackSid: string, volume: number) => {
     setScreenshareVolumes((prev) => ({ ...prev, [trackSid]: volume }));
+    // Update audio element volume immediately
     const audioEl = audioElementRefs.current[`screenshare-${trackSid}`];
     if (audioEl) {
       audioEl.volume = volume;
     }
   };
+
+  // Sync volume changes to audio elements
+  useEffect(() => {
+    Object.entries(userVolumes).forEach(([participantId, volume]) => {
+      const audioEl = audioElementRefs.current[`user-${participantId}`];
+      if (audioEl) {
+        const isLocalParticipant = participantId === localParticipant.identity;
+        audioEl.volume = volume;
+        audioEl.muted = isLocalParticipant; // Always mute local participant's own audio
+      }
+    });
+  }, [userVolumes, localParticipant]);
 
   // Screenshare subscription functions
   const subscribeToScreenshare = (trackSid: string) => {
@@ -1168,6 +1183,34 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     Track.Source.ScreenShareAudio,
   ]);
 
+  // Initialize default screenshare volumes to 0.5
+  useEffect(() => {
+    const screenshareTracks = allTracks.filter(
+      (t) => t.publication.source === Track.Source.ScreenShare
+    );
+    screenshareTracks.forEach((track) => {
+      if (!screenshareVolumes[track.publication.trackSid]) {
+        setScreenshareVolumes((prev) => ({ ...prev, [track.publication.trackSid]: 0.5 }));
+      }
+    });
+  }, [allTracks]);
+
+  // Sync screenshare volume changes to audio elements
+  useEffect(() => {
+    Object.entries(screenshareVolumes).forEach(([trackSid, volume]) => {
+      const audioEl = audioElementRefs.current[`screenshare-${trackSid}`];
+      if (audioEl) {
+        // Find the track to check if it's local
+        const track = allTracks.find(
+          (t) => t.publication.trackSid === trackSid && t.publication.source === Track.Source.ScreenShare
+        );
+        const isLocalScreenshare = track?.participant.identity === localParticipant.identity;
+        audioEl.volume = volume;
+        audioEl.muted = isLocalScreenshare; // Always mute local screenshare audio
+      }
+    });
+  }, [screenshareVolumes, allTracks, localParticipant]);
+
   // Clean up subscriptions when screenshares end
   useEffect(() => {
     const currentScreenshareTrackSids = new Set(
@@ -1242,7 +1285,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                           )
                           .map(track => {
                             const isLocalScreenshare = track.participant.identity === localParticipant.identity;
-                            const volume = screenshareVolumes[activeScreenShare.publication.trackSid] ?? 1.0;
+                            const volume = screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5;
                             return (
                               <audio
                                 key={track.publication.trackSid}
@@ -1278,7 +1321,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                             min="0"
                             max="1"
                             step="0.01"
-                            value={screenshareVolumes[activeScreenShare.publication.trackSid] ?? 1.0}
+                            value={screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5}
                             onChange={(e) => {
                               e.stopPropagation();
                               setScreenshareVolume(activeScreenShare.publication.trackSid, parseFloat(e.target.value));
@@ -1414,20 +1457,25 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                       t.publication.source === Track.Source.ScreenShareAudio &&
                                       t.participant.identity === track.participant.identity
                                     )
-                                    .map(audioTrack => (
-                                      <audio
-                                        key={audioTrack.publication.trackSid}
-                                        ref={(el) => {
-                                          if (el && audioTrack.publication.track?.kind === "audio") {
-                                            el.muted = isLocalScreenshare;
-                                            audioTrack.publication.track.attach(el);
-                                          }
-                                        }}
-                                        autoPlay
-                                        playsInline
-                                        muted={isLocalScreenshare}
-                                      />
-                                    ))}
+                                    .map(audioTrack => {
+                                      const volume = screenshareVolumes[track.publication.trackSid] ?? 0.5;
+                                      return (
+                                        <audio
+                                          key={audioTrack.publication.trackSid}
+                                          ref={(el) => {
+                                            if (el && audioTrack.publication.track?.kind === "audio") {
+                                              audioElementRefs.current[`screenshare-${track.publication.trackSid}`] = el;
+                                              audioTrack.publication.track.attach(el);
+                                              el.volume = volume;
+                                              el.muted = isLocalScreenshare;
+                                            }
+                                          }}
+                                          autoPlay
+                                          playsInline
+                                          muted={isLocalScreenshare}
+                                        />
+                                      );
+                                    })}
                                 </>
                               ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center bg-background/80">
@@ -1461,12 +1509,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                 ) : (
                   // Gallery grid layout with pagination
                   (() => {
-                    // Combine participants and subscribed screenshares
+                    // Combine participants and ALL screenshares (not just subscribed ones)
                     const allCards = [
                       ...participants.map((p) => ({ type: 'participant' as const, data: p })),
                       ...allTracks
                         .filter((t) => t.publication.source === Track.Source.ScreenShare)
-                        .filter((t) => subscribedScreenshares.has(t.publication.trackSid))
                         .map((t) => ({ type: 'screenshare' as const, data: t })),
                     ];
 
@@ -1538,18 +1585,22 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                       </div>
                                     )}
 
-                                    {/* Audio element for volume control */}
+                                    {/* Audio element for volume control - muted for local participant */}
                                     {micTrack && micTrack.publication.track?.kind === "audio" && (
                                       <audio
                                         ref={(el) => {
                                           if (el && micTrack.publication.track) {
+                                            const isLocalParticipant = participant.identity === localParticipant.identity;
                                             audioElementRefs.current[`user-${participant.identity}`] = el;
-                                            el.volume = volume;
                                             micTrack.publication.track.attach(el);
+                                            // Set volume after attachment, muted for local participant
+                                            el.volume = volume;
+                                            el.muted = isLocalParticipant;
                                           }
                                         }}
                                         autoPlay
                                         playsInline
+                                        muted={participant.identity === localParticipant.identity}
                                       />
                                     )}
 
@@ -1586,7 +1637,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                               } else {
                                 const track = card.data;
                                 const isSubscribed = subscribedScreenshares.has(track.publication.trackSid);
-                                const volume = screenshareVolumes[track.publication.trackSid] ?? 1.0;
+                                const volume = screenshareVolumes[track.publication.trackSid] ?? 0.5;
                                 const isLocalScreenshare = track.participant.identity === localParticipant.identity;
 
                                 // Find screenshare audio track
@@ -1618,9 +1669,10 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                             ref={(el) => {
                                               if (el && screenshareAudioTrack.publication.track) {
                                                 audioElementRefs.current[`screenshare-${track.publication.trackSid}`] = el;
+                                                screenshareAudioTrack.publication.track.attach(el);
+                                                // Set volume and muted after attachment
                                                 el.volume = volume;
                                                 el.muted = isLocalScreenshare;
-                                                screenshareAudioTrack.publication.track.attach(el);
                                               }
                                             }}
                                             autoPlay
