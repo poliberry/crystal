@@ -8,6 +8,11 @@ import { useModal } from "@/hooks/use-modal-store";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/auth-store";
 import axios from "axios";
+import {
+  sendNotification,
+  requestPermission,
+  isPermissionGranted,
+} from "@tauri-apps/plugin-notification";
 
 type AppNotificationPayload =
   | {
@@ -29,7 +34,7 @@ type NotificationWithPayload = INotification & {
 };
 
 // Check if running in Tauri
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
 
 function NotificationListener() {
   const novu = useNovu();
@@ -38,33 +43,19 @@ function NotificationListener() {
   const { user } = useAuthStore();
   const [tauriNotification, setTauriNotification] = useState<any>(null);
 
-  // Load Tauri notification plugin if available
   useEffect(() => {
-    if (isTauri) {
-      // Dynamically import Tauri notification plugin
-      // This will only work when running in Tauri, so we wrap it in a try-catch
-      // @ts-ignore - Module may not be available in browser context
-      import('@tauri-apps/plugin-notification').then((notification) => {
-        setTauriNotification(notification);
-      }).catch((err) => {
-        // Silently fail if not in Tauri environment
-        console.debug('Tauri notification plugin not available (not in Tauri environment)');
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isTauri && tauriNotification) {
-      // Tauri handles permissions differently - no need to request here
-      // Permissions are handled by the OS when the notification is sent
-      return;
-    }
-    
-    // Browser notification permission request
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, [isTauri, tauriNotification]);
+    const checkNotificationPermission = async () => {
+      if (isTauri) {
+        const permission = await requestPermission();
+        if (permission === "granted") {
+          console.log("Notification permission granted");
+        } else {
+          console.log("Notification permission not granted");
+        }
+      }
+    };
+    checkNotificationPermission();
+  }, [isTauri, requestPermission]);
 
   useEffect(() => {
     if (!novu) {
@@ -83,9 +74,9 @@ function NotificationListener() {
       // Check if this is an incoming DM call notification
       // Novu notifications store custom data in result.data or result.payload
       const payload = result.data;
-      
+
       console.log("Extracted payload:", payload);
-      
+
       if (payload?.type === "incoming-dm-call") {
         // This is an incoming call notification - open the DM call modal
         onOpen("dmCall", {
@@ -97,7 +88,7 @@ function NotificationListener() {
               avatar: payload.imageUrl,
               id: payload.callerId,
             },
-            type: payload.isVideo === 'true' ? "video" : "audio",
+            type: payload.isVideo === "true" ? "video" : "audio",
           },
         });
         return; // Don't show toast for call notifications
@@ -112,11 +103,13 @@ function NotificationListener() {
         // Check if user is viewing the conversation/channel
         if (payload?.conversationId) {
           // Check if pathname matches conversation route
-          isViewingChannel = pathname === `/conversations/${payload.conversationId}`;
+          isViewingChannel =
+            pathname === `/conversations/${payload.conversationId}`;
         } else if (payload?.channelId) {
           // For channel messages, check if pathname matches channel route
           // Pathname format: /servers/[serverId]/channels/[channelId]
-          isViewingChannel = pathname?.includes(`/channels/${payload.channelId}`) || false;
+          isViewingChannel =
+            pathname?.includes(`/channels/${payload.channelId}`) || false;
         }
 
         if (isViewingChannel) {
@@ -125,13 +118,18 @@ function NotificationListener() {
             // Mark notification as read/archived on Novu
             // Use the Novu API to mark the notification as read
             if (result.id && user?.userId) {
-              const response = await axios.post(`/api/notifications/mark-read`, {
-                notificationId: result.id,
-                subscriberId: user.userId,
-              });
-              
+              const response = await axios.post(
+                `/api/notifications/mark-read`,
+                {
+                  notificationId: result.id,
+                  subscriberId: user.userId,
+                }
+              );
+
               if (response.status === 200) {
-                console.log("Notification auto-archived - user is viewing the channel");
+                console.log(
+                  "Notification auto-archived - user is viewing the channel"
+                );
               }
             }
           } catch (error) {
@@ -161,26 +159,20 @@ function NotificationListener() {
       if (isTauri && tauriNotification) {
         // Use Tauri notification plugin
         try {
-          const { isPermissionGranted, requestPermission, sendNotification } = tauriNotification;
-          
-          let permissionGranted = await isPermissionGranted();
-          
-          if (!permissionGranted) {
-            const permission = await requestPermission();
-            permissionGranted = permission === 'granted';
-          }
-          
-          if (permissionGranted) {
-            await sendNotification({
-              title: title,
-              body: body,
-              icon: icon,
-            });
+          const permission = await requestPermission();
+          if (permission === "granted") {
+            try {
+              await sendNotification({
+                title: title,
+                body: body,
+                icon: icon,
+              });
+            } catch (error) {
+              console.error("Failed to send Tauri notification:", error);
+            }
           }
         } catch (error) {
-          console.error('Failed to send Tauri notification:', error);
-          // Fallback to browser notifications if Tauri fails
-          sendBrowserNotification(title, body, icon);
+          console.error("Failed to send Tauri notification:", error);
         }
       } else {
         // Use browser Notification API
@@ -219,7 +211,11 @@ function NotificationListener() {
 }
 
 // Helper function for browser notifications
-async function sendBrowserNotification(title: string, body: string, icon: string) {
+async function sendBrowserNotification(
+  title: string,
+  body: string,
+  icon: string
+) {
   let permissionGranted = Notification.permission === "granted";
 
   // If not we need to request it
