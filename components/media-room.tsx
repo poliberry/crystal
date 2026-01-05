@@ -285,7 +285,19 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     // Update audio element volume immediately (don't wait for useEffect)
     const audioEl = audioElementRefs.current[`screenshare-${trackSid}`];
     if (audioEl) {
+      // Set volume (0 to 0.5 range)
       audioEl.volume = clampedVolume;
+      // If volume is 0, mute it (unless it's already muted for being local - preserve that)
+      // If volume > 0 and it was muted only because volume was 0, unmute it
+      // But if it's muted because it's local, keep it muted
+      const wasMutedForVolume = audioEl.volume === 0;
+      if (clampedVolume === 0) {
+        audioEl.muted = true;
+      } else if (wasMutedForVolume) {
+        // Only unmute if it was muted for volume, not for being local
+        // We'll let the useEffect handle the local check
+        audioEl.muted = false;
+      }
     }
   };
 
@@ -1224,11 +1236,10 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         const isLocalScreenshare = track?.participant.identity === localParticipant.identity;
         // Clamp volume between 0 and 0.5
         const clampedVolume = Math.max(0, Math.min(0.5, volume));
-        // Force update the volume - this ensures it actually changes
-        if (audioEl.volume !== clampedVolume) {
-          audioEl.volume = clampedVolume;
-        }
-        audioEl.muted = isLocalScreenshare; // Always mute local screenshare audio
+        // Set volume (0 to 0.5 range)
+        audioEl.volume = clampedVolume;
+        // Mute if volume is 0 OR if it's local screenshare
+        audioEl.muted = clampedVolume === 0 || isLocalScreenshare;
       }
     });
   }, [screenshareVolumes, allTracks, localParticipant]);
@@ -1322,7 +1333,8 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                     const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
                                     const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
                                     el.volume = clampedVolume;
-                                    el.muted = isLocalScreenshare;
+                                    // Mute if volume is 0 OR if it's local screenshare
+                                    el.muted = clampedVolume === 0 || isLocalScreenshare;
                                   }
                                 }}
                               />
@@ -1496,7 +1508,8 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                               const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
                                               const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
                                               el.volume = clampedVolume;
-                                              el.muted = isLocalScreenshare;
+                                              // Mute if volume is 0 OR if it's local screenshare
+                                              el.muted = clampedVolume === 0 || isLocalScreenshare;
                                             }
                                           }}
                                           autoPlay
@@ -1704,7 +1717,8 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                                 const currentVolume = screenshareVolumes[trackSid] ?? 0.5;
                                                 const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
                                                 el.volume = clampedVolume;
-                                                el.muted = isLocalScreenshare;
+                                                // Mute if volume is 0 OR if it's local screenshare
+                                                el.muted = clampedVolume === 0 || isLocalScreenshare;
                                               }
                                             }}
                       
