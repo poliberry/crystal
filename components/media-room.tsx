@@ -264,11 +264,26 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
 
   // Volume control functions
   const setUserVolume = (participantId: string, volume: number) => {
-    setUserVolumes((prev) => ({ ...prev, [participantId]: volume }));
+    // Clamp volume between 0 and 1
+    const clampedVolume = Math.max(0, Math.min(1, volume));
+    
+    // Update state
+    setUserVolumes((prev) => {
+      // Only update if different to avoid unnecessary re-renders
+      if (prev[participantId] === clampedVolume) {
+        return prev;
+      }
+      return { ...prev, [participantId]: clampedVolume };
+    });
+    
     // Update audio element volume immediately
     const audioEl = audioElementRefs.current[`user-${participantId}`];
     if (audioEl) {
-      audioEl.volume = volume;
+      audioEl.volume = clampedVolume;
+      // Mute if volume is 0 (local check will be handled by useEffect)
+      if (clampedVolume === 0) {
+        audioEl.muted = true;
+      }
     }
   };
 
@@ -320,17 +335,27 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     }, 0);
   };
 
-  // Sync volume changes to audio elements
+  // Sync volume changes to audio elements - ALWAYS mute local participants
   useEffect(() => {
     Object.entries(userVolumes).forEach(([participantId, volume]) => {
       const audioEl = audioElementRefs.current[`user-${participantId}`];
       if (audioEl) {
         const isLocalParticipant = participantId === localParticipant.identity;
-        audioEl.volume = volume;
-        audioEl.muted = isLocalParticipant; // Always mute local participant's own audio
+        const clampedVolume = Math.max(0, Math.min(1, volume));
+        audioEl.volume = clampedVolume;
+        // ALWAYS mute local participants, regardless of volume
+        audioEl.muted = isLocalParticipant || clampedVolume === 0;
       }
     });
   }, [userVolumes, localParticipant]);
+
+  // Additional effect to ensure local participant is always muted
+  useEffect(() => {
+    const localAudioEl = audioElementRefs.current[`user-${localParticipant.identity}`];
+    if (localAudioEl) {
+      localAudioEl.muted = true;
+    }
+  }, [localParticipant.identity]);
 
   // Screenshare subscription functions
   const subscribeToScreenshare = (trackSid: string) => {
@@ -1646,40 +1671,46 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
 
                                     {/* Audio element for volume control - muted for local participant */}
                                     {micTrack && micTrack.publication.track?.kind === "audio" && (
-                                      <audio
-                                        ref={(el) => {
-                                          if (el && micTrack.publication.track) {
-                                            const isLocalParticipant = participant.identity === localParticipant.identity;
-                                            audioElementRefs.current[`user-${participant.identity}`] = el;
-                                            micTrack.publication.track.attach(el);
-                                            // Set volume after attachment, muted for local participant
-                                            el.volume = volume;
-                                            el.muted = isLocalParticipant;
-                                          }
-                                        }}
-                                        autoPlay
-                                        playsInline
-                                        muted={participant.identity === localParticipant.identity}
+                                      <UserAudioElement
+                                        track={micTrack}
+                                        participantId={participant.identity}
+                                        volume={volume}
+                                        isLocalParticipant={participant.identity === localParticipant.identity}
+                                        audioElementRefs={audioElementRefs}
+                                        userVolumes={userVolumes}
                                       />
                                     )}
 
                                     {/* Volume control */}
                                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <div className="bg-black/70 rounded-lg p-1 flex items-center gap-1">
-                                        <Volume2 className="w-3 h-3 text-white" />
-                                        <input
-                                          type="range"
-                                          min="0"
-                                          max="1"
-                                          step="0.01"
-                                          value={volume}
-                                          onChange={(e) => {
+                                      <div className="bg-black/70 rounded-lg p-1 flex flex-col items-center gap-0.5">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-4 w-4 p-0 text-white hover:bg-white/20"
+                                          onClick={(e) => {
                                             e.stopPropagation();
-                                            setUserVolume(participant.identity, parseFloat(e.target.value));
+                                            const newVolume = Math.min(1, volume + 0.05);
+                                            setUserVolume(participant.identity, newVolume);
                                           }}
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="w-16 h-1"
-                                        />
+                                        >
+                                          <ChevronUp className="w-3 h-3" />
+                                        </Button>
+                                        <span className="text-xs text-white min-w-[2rem] text-center">
+                                          {Math.round(volume * 100)}%
+                                        </span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-4 w-4 p-0 text-white hover:bg-white/20"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newVolume = Math.max(0, volume - 0.05);
+                                            setUserVolume(participant.identity, newVolume);
+                                          }}
+                                        >
+                                          <ChevronDown className="w-3 h-3" />
+                                        </Button>
                                       </div>
                                     </div>
 
@@ -2170,6 +2201,65 @@ function ActiveParticipantCard({
         </div>
       </div>
     </div>
+  );
+}
+
+// User Audio Element Component - handles volume updates properly
+function UserAudioElement({
+  track,
+  participantId,
+  volume,
+  isLocalParticipant,
+  audioElementRefs,
+  userVolumes,
+}: {
+  track: TrackReference;
+  participantId: string;
+  volume: number;
+  isLocalParticipant: boolean;
+  audioElementRefs: React.MutableRefObject<Record<string, HTMLAudioElement>>;
+  userVolumes: Record<string, number>;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Always read current volume from state
+  const currentVolume = userVolumes[participantId] ?? volume;
+  const clampedVolume = Math.max(0, Math.min(1, currentVolume));
+
+  // Update volume whenever userVolumes changes - ALWAYS mute local participants
+  useEffect(() => {
+    if (audioRef.current) {
+      const latestVolume = userVolumes[participantId] ?? volume;
+      const latestClamped = Math.max(0, Math.min(1, latestVolume));
+      audioRef.current.volume = latestClamped;
+      // ALWAYS mute local participants, regardless of volume
+      audioRef.current.muted = isLocalParticipant || latestClamped === 0;
+    }
+  }, [userVolumes, participantId, volume, isLocalParticipant]);
+
+  // Enforce muted state on mount and whenever isLocalParticipant changes
+  useEffect(() => {
+    if (audioRef.current && isLocalParticipant) {
+      audioRef.current.muted = true;
+    }
+  }, [isLocalParticipant]);
+
+  return (
+    <audio
+      ref={(el) => {
+        audioRef.current = el;
+        if (el && track.publication.track) {
+          track.publication.track.attach(el);
+          audioElementRefs.current[`user-${participantId}`] = el;
+          // Set initial volume
+          el.volume = clampedVolume;
+          // ALWAYS mute local participants immediately
+          el.muted = isLocalParticipant || clampedVolume === 0;
+        }
+      }}
+      autoPlay
+      playsInline
+      muted={isLocalParticipant}
+    />
   );
 }
 
