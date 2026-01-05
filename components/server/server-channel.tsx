@@ -6,11 +6,16 @@ import {
   Trash,
   Video,
   GripVertical,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAuthStore } from "@/lib/auth-store";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 import { ActionTooltip } from "@/components/action-tooltip";
 import { type ModalType, useModal } from "@/hooks/use-modal-store";
@@ -54,6 +59,17 @@ export const ServerChannel = ({
   const { user } = useAuthStore();
   const media = useLiveKit();
   const [users, setUsers] = useState<any[]>([]);
+
+  // Check if channel is muted
+  const isChannelMuted = useQuery(
+    api.mutedChannels.isMuted,
+    user?.userId && channel.type === "TEXT"
+      ? { userId: user.userId, channelId: channel._id as Id<"channels"> }
+      : "skip"
+  );
+
+  const muteChannel = useMutation(api.mutedChannels.mute);
+  const unmuteChannel = useMutation(api.mutedChannels.unmute);
 
   // Get connected users from LiveKit API route (not socket)
   const getConnectedUsers = async () => {
@@ -115,6 +131,28 @@ export const ServerChannel = ({
   const onAction = (e: React.MouseEvent, action: ModalType) => {
     e.stopPropagation();
     onOpen(action, { channel, server });
+  };
+
+  const handleToggleMute = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user?.userId || channel.type !== "TEXT") return;
+
+    try {
+      if (isChannelMuted) {
+        await unmuteChannel({
+          userId: user.userId,
+          channelId: channel._id as Id<"channels">,
+        });
+      } else {
+        await muteChannel({
+          userId: user.userId,
+          channelId: channel._id as Id<"channels">,
+          serverId: server._id as Id<"servers">,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to toggle channel mute:", error);
+    }
   };
 
   return (
@@ -238,16 +276,38 @@ export const ServerChannel = ({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={(e) => onAction(e, "editChannel")}>
-          Edit Channel
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          className="text-red-500"
-          onClick={(e) => onAction(e, "deleteChannel")}
-        >
-          Delete Channel
-        </ContextMenuItem>
+        {channel.type === "TEXT" && (
+          <>
+            <ContextMenuItem onClick={handleToggleMute}>
+              {isChannelMuted ? (
+                <>
+                  <Bell className="h-4 w-4 mr-2" />
+                  Unmute Channel
+                </>
+              ) : (
+                <>
+                  <BellOff className="h-4 w-4 mr-2" />
+                  Mute Channel
+                </>
+              )}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
+        {role !== "GUEST" && (
+          <>
+            <ContextMenuItem onClick={(e) => onAction(e, "editChannel")}>
+              Edit Channel
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-red-500"
+              onClick={(e) => onAction(e, "deleteChannel")}
+            >
+              Delete Channel
+            </ContextMenuItem>
+          </>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

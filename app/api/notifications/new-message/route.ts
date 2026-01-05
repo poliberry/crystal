@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
     }
 
-    // Filter subscribers based on notification settings and muted channels
+    // Filter subscribers based on notification settings, muted channels, and muted servers
     let filteredSubscriberIds: string[] = [];
     try {
         // Use the Convex HTTP client to query notification filters
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
         filteredSubscriberIds = await convex.query("notificationFilters:filterSubscribers" as any, {
             subscriberIds: subscriberIds,
             channelId: channelId as any,
+            serverId: serverId as any,
         });
     } catch (error) {
         console.error("Error filtering subscribers:", error);

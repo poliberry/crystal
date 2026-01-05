@@ -9,7 +9,13 @@ import {
   Trash,
   UserPlus,
   Users,
+  Bell,
+  BellOff,
 } from "lucide-react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthStore } from "@/lib/auth-store";
+import { Id } from "@/convex/_generated/dataModel";
 
 import {
   DropdownMenu,
@@ -28,9 +34,41 @@ type ServerHeaderProps = {
 
 export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
   const { onOpen } = useModal();
+  const { user } = useAuthStore();
 
   const isAdmin = role === ("ADMIN" as string);
   const isModerator = isAdmin || role === ("MODERATOR" as string);
+
+  // Check if server is muted
+  const isServerMuted = useQuery(
+    api.mutedServers.isMuted,
+    user?.userId
+      ? { userId: user.userId, serverId: server._id as Id<"servers"> }
+      : "skip"
+  );
+
+  const muteServer = useMutation(api.mutedServers.mute);
+  const unmuteServer = useMutation(api.mutedServers.unmute);
+
+  const handleToggleServerMute = async () => {
+    if (!user?.userId) return;
+
+    try {
+      if (isServerMuted) {
+        await unmuteServer({
+          userId: user.userId,
+          serverId: server._id as Id<"servers">,
+        });
+      } else {
+        await muteServer({
+          userId: user.userId,
+          serverId: server._id as Id<"servers">,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to toggle server mute:", error);
+    }
+  };
 
   return (
     <div className="w-full h-fit flex flex-col gap-0 relative">
@@ -42,6 +80,23 @@ export const ServerHeader = ({ server, role }: ServerHeaderProps) => {
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56 text-xs font-medium text-foreground border-1 border-border space-y-[2px]">
+          <DropdownMenuItem
+            onClick={handleToggleServerMute}
+            className="px-3 py-2 text-sm cursor-pointer"
+          >
+            {isServerMuted ? (
+              <>
+                <Bell className="h-4 w-4 mr-2" />
+                Unmute Server
+              </>
+            ) : (
+              <>
+                <BellOff className="h-4 w-4 mr-2" />
+                Mute Server
+              </>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           {isModerator && (
             <DropdownMenuItem
               onClick={() => onOpen("invite", { server })}

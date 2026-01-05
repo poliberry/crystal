@@ -51,6 +51,7 @@
     "@tabler/icons-react": "^3.36.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@tanstack/react-query": "^4.35.3",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@types/three": "^0.178.1",
     "@uploadthing/react": "^6.4.1",
     "axios": "^1.7.4",

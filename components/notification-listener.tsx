@@ -1,6 +1,6 @@
 "use client";
 import { useNovu } from "@novu/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { Notification as INotification } from "@novu/react";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -28,17 +28,43 @@ type NotificationWithPayload = INotification & {
   payload?: AppNotificationPayload;
 };
 
+// Check if running in Tauri
+const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+
 function NotificationListener() {
   const novu = useNovu();
   const { onOpen } = useModal();
   const pathname = usePathname();
   const { user } = useAuthStore();
+  const [tauriNotification, setTauriNotification] = useState<any>(null);
+
+  // Load Tauri notification plugin if available
+  useEffect(() => {
+    if (isTauri) {
+      // Dynamically import Tauri notification plugin
+      // This will only work when running in Tauri, so we wrap it in a try-catch
+      // @ts-ignore - Module may not be available in browser context
+      import('@tauri-apps/plugin-notification').then((notification) => {
+        setTauriNotification(notification);
+      }).catch((err) => {
+        // Silently fail if not in Tauri environment
+        console.debug('Tauri notification plugin not available (not in Tauri environment)');
+      });
+    }
+  }, []);
 
   useEffect(() => {
+    if (isTauri && tauriNotification) {
+      // Tauri handles permissions differently - no need to request here
+      // Permissions are handled by the OS when the notification is sent
+      return;
+    }
+    
+    // Browser notification permission request
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-  }, []);
+  }, [isTauri, tauriNotification]);
 
   useEffect(() => {
     if (!novu) {
@@ -131,17 +157,34 @@ function NotificationListener() {
         },
       });
 
-      let permissionGranted = Notification.permission === "granted";
-
-      // If not we need to request it
-      if (!permissionGranted) {
-        const permission = await Notification.requestPermission();
-        permissionGranted = permission === "granted";
-      }
-
-      // Once permission has been granted we can send the notification
-      if (permissionGranted) {
-        new Notification(title, { body: body, icon: icon });
+      // Send system notification
+      if (isTauri && tauriNotification) {
+        // Use Tauri notification plugin
+        try {
+          const { isPermissionGranted, requestPermission, sendNotification } = tauriNotification;
+          
+          let permissionGranted = await isPermissionGranted();
+          
+          if (!permissionGranted) {
+            const permission = await requestPermission();
+            permissionGranted = permission === 'granted';
+          }
+          
+          if (permissionGranted) {
+            await sendNotification({
+              title: title,
+              body: body,
+              icon: icon,
+            });
+          }
+        } catch (error) {
+          console.error('Failed to send Tauri notification:', error);
+          // Fallback to browser notifications if Tauri fails
+          sendBrowserNotification(title, body, icon);
+        }
+      } else {
+        // Use browser Notification API
+        sendBrowserNotification(title, body, icon);
       }
     };
 
@@ -170,9 +213,25 @@ function NotificationListener() {
       novu.off("notifications.notification_received", handleNewNotification);
       novu.off("notifications.unread_count_changed", handleUnreadCountChanged);
     };
-  }, [novu, onOpen, pathname, user?.userId]);
+  }, [novu, onOpen, pathname, user?.userId, tauriNotification]);
 
   return null; // This component doesn't render anything
+}
+
+// Helper function for browser notifications
+async function sendBrowserNotification(title: string, body: string, icon: string) {
+  let permissionGranted = Notification.permission === "granted";
+
+  // If not we need to request it
+  if (!permissionGranted) {
+    const permission = await Notification.requestPermission();
+    permissionGranted = permission === "granted";
+  }
+
+  // Once permission has been granted we can send the notification
+  if (permissionGranted) {
+    new Notification(title, { body: body, icon: icon });
+  }
 }
 
 export default NotificationListener;

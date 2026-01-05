@@ -19,6 +19,7 @@ import type * as livekit from "../livekit.js";
 import type * as members from "../members.js";
 import type * as messages from "../messages.js";
 import type * as mutedChannels from "../mutedChannels.js";
+import type * as mutedServers from "../mutedServers.js";
 import type * as notificationFilters from "../notificationFilters.js";
 import type * as notificationSettings from "../notificationSettings.js";
 import type * as notifications from "../notifications.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   members: typeof members;
   messages: typeof messages;
   mutedChannels: typeof mutedChannels;
+  mutedServers: typeof mutedServers;
   notificationFilters: typeof notificationFilters;
   notificationSettings: typeof notificationSettings;
   notifications: typeof notifications;

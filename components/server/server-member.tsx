@@ -113,18 +113,22 @@ export const ServerMember = ({
             <p
               className={cn(
                 "font-semibold text-sm group-hover:text-zinc-600 text-left dark:group-hover:text-zinc-300 transition",
-                isOffline
-                  ? "text-zinc-400 opacity-70"
-                  : "text-zinc-500 dark:text-zinc-400",
+                // Only apply default text colors if no role color is set
+                !member.roleData?.color && (
+                  isOffline
+                    ? "text-zinc-400 opacity-70"
+                    : "text-zinc-500 dark:text-zinc-400"
+                ),
                 params?.memberId === memberId &&
                   (isOffline
                     ? ""
                     : "text-primary dark:text-zinc-200 dark:group-hover:text-white")
               )}
               style={
-                !isOffline && member.roleData?.color && !params?.memberId
+                member.roleData?.color && !params?.memberId
                   ? {
                       color: member.roleData.color,
+                      opacity: isOffline ? 0.7 : 1, // Reduce opacity for offline users
                     }
                   : undefined
               }

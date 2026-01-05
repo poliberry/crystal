@@ -254,7 +254,7 @@ export const UserCard = () => {
                   {profile.globalName || profile.name}
                 </span>
                 <div className="text-[10.5px] text-muted-foreground truncate">
-                  {profile?.presenceStatus ? profile.presenceStatus : presenceMap[presence]?.text || "Offline"}
+                  {profile?.presenceStatus && profile.status !== 'OFFLINE' && profile.status !== 'INVISIBLE' ? profile.presenceStatus : presenceMap[presence]?.text || "Offline"}
                 </div>
               </div>
             </div>

@@ -259,5 +259,17 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_channelId", ["channelId"])
     .index("by_userId_channelId", ["userId", "channelId"]),
+
+  mutedServers: defineTable({
+    profileId: v.id("profiles"),
+    userId: v.string(),
+    serverId: v.id("servers"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_profileId", ["profileId"])
+    .index("by_userId", ["userId"])
+    .index("by_serverId", ["serverId"])
+    .index("by_userId_serverId", ["userId", "serverId"]),
 });
 

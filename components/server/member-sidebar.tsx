@@ -72,28 +72,42 @@ export const MemberSidebar = ({
     return member.roles || roleIds.map((id: string) => roles.find((r: any) => r._id === id)).filter(Boolean);
   };
 
-  // Helper function to get highest role (by position) for a member
+  // Helper function to get first role (by roleIds array order) for a member
   const getHighestRole = (member: any) => {
-    const memberRoles = getMemberRoles(member);
-    if (memberRoles.length === 0) {
+    const roleIds = member.roleIds || (member.roleId ? [member.roleId] : []);
+    if (roleIds.length === 0) {
       // Fallback to legacy role
       const roleOrder: Record<string, number> = { ADMIN: 3, MODERATOR: 2, GUEST: 1 };
       return { position: roleOrder[member.role] || 0, role: member.role, isLegacy: true };
     }
-    return memberRoles.reduce((highest: any, current: any) => {
-      if (!highest || (current.position > highest.position)) {
-        return current;
-      }
-      return highest;
-    }, null);
+    // Get the first role ID from the array and find its role
+    const firstRoleId = roleIds[0];
+    return roles.find((r: any) => r._id === firstRoleId) || null;
   };
 
-  // Helper function to get hoisted role for a member (first hoisted role found, or null)
+  // Helper function to get first hoisted role for a member (first in roleIds array order)
   const getHoistedRole = (member: any) => {
+    // Get roleIds in the order they appear (this represents assignment order)
+    const roleIds = member.roleIds || (member.roleId ? [member.roleId] : []);
+    
+    // Find the first hoisted role in the order they appear in roleIds
+    for (const roleId of roleIds) {
+      const role = roles.find((r: any) => r._id === roleId);
+      if (role && role.hoist) {
+        return role;
+      }
+    }
+    
+    // Fallback: if roleIds order doesn't work, check member.roles array
     const memberRoles = getMemberRoles(member);
-    // Sort by position descending to check highest hoisted role first
-    const sortedRoles = [...memberRoles].sort((a: any, b: any) => b.position - a.position);
-    return sortedRoles.find((r: any) => r.hoist) || null;
+    const hoistedRoles = memberRoles.filter((r: any) => r.hoist);
+    
+    if (hoistedRoles.length === 0) {
+      return null;
+    }
+    
+    // Return the first hoisted role found (maintain original order)
+    return hoistedRoles[0] || null;
   };
 
   // Helper function to check if member is online
@@ -111,19 +125,27 @@ export const MemberSidebar = ({
     members
       .filter((member: any) => member.profile) // Filter out members without profile data
       .forEach((member: any) => {
-        const hoistedRole = getHoistedRole(member);
-        const highestRole = getHighestRole(member);
-        const isOnline = isMemberOnline(member);
+      const hoistedRole = getHoistedRole(member); // First hoisted role for grouping and color
+      const highestRole = getHighestRole(member);
+      // Get first role in roleIds array for color (for non-hoisted online members)
+      const firstRole = (() => {
+        const roleIds = member.roleIds || (member.roleId ? [member.roleId] : []);
+        if (roleIds.length === 0) return null;
+        const firstRoleId = roleIds[0];
+        return roles.find((r: any) => r._id === firstRoleId) || null;
+      })();
+      const isOnline = isMemberOnline(member);
 
         // Offline and invisible members always go to Offline section
         if (!isOnline) {
-          offlineMembers.push({ ...member, highestRole, hoistedRole });
+          // For offline members, use highest role for color (hoisted or non-hoisted)
+          offlineMembers.push({ ...member, highestRole, hoistedRole, colorRole: highestRole });
           return;
         }
 
         // Online members are grouped by hoisted roles
         if (hoistedRole) {
-          // Member has a hoisted role - group by that role
+          // Member has a hoisted role - group by first hoisted role (for grouping)
           const roleKey = hoistedRole._id;
           if (!groups[roleKey]) {
             groups[roleKey] = {
@@ -132,33 +154,36 @@ export const MemberSidebar = ({
               onlineCount: 0,
             };
           }
-          groups[roleKey].members.push({ ...member, highestRole, hoistedRole });
+          groups[roleKey].members.push({ ...member, highestRole, hoistedRole, colorRole: hoistedRole });
           groups[roleKey].onlineCount++;
         } else {
           // Member has no hoisted role - group in Online section
-          onlineMembers.push({ ...member, highestRole });
+          // Use first role in roleIds array for color
+          onlineMembers.push({ ...member, highestRole, colorRole: firstRole || highestRole });
         }
       });
 
-    // Sort members within each group by highest role position
+    // Sort members within each group alphabetically by name
     Object.values(groups).forEach((group) => {
       group.members.sort((a: any, b: any) => {
-        const posA = a.highestRole?.position || 0;
-        const posB = b.highestRole?.position || 0;
-        return posB - posA;
+        const nameA = (a.profile?.globalName || a.profile?.name || "").toLowerCase();
+        const nameB = (b.profile?.globalName || b.profile?.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
       });
     });
 
+    // Sort online members alphabetically by name
     onlineMembers.sort((a: any, b: any) => {
-      const posA = a.highestRole?.position || 0;
-      const posB = b.highestRole?.position || 0;
-      return posB - posA;
+      const nameA = (a.profile?.globalName || a.profile?.name || "").toLowerCase();
+      const nameB = (b.profile?.globalName || b.profile?.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
     });
 
+    // Sort offline members alphabetically by name
     offlineMembers.sort((a: any, b: any) => {
-      const posA = a.highestRole?.position || 0;
-      const posB = b.highestRole?.position || 0;
-      return posB - posA;
+      const nameA = (a.profile?.globalName || a.profile?.name || "").toLowerCase();
+      const nameB = (b.profile?.globalName || b.profile?.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
     });
 
     // Sort hoisted role groups by index (lowest first, as index represents hierarchy order)
@@ -205,7 +230,7 @@ export const MemberSidebar = ({
                       key={memberId}
                       member={{
                         ...member,
-                        roleData: member.highestRole, // Pass highest role for color
+                        roleData: member.hoistedRole || member.highestRole, // Use first hoisted role for color, fallback to highest role
                         hoistedRole: member.hoistedRole,
                       }}
                       profile={profile}
@@ -228,12 +253,13 @@ export const MemberSidebar = ({
               <div className="w-full">
                 {groupedMembers.onlineMembers.map((member: any) => {
                   const memberId = member._id || member.id;
+                  // For non-hoisted online members, use first role in roleIds array for color
                   return (
                     <ServerMember
                       key={memberId}
                       member={{
                         ...member,
-                        roleData: member.highestRole, // Pass highest role for color
+                        roleData: member.colorRole || member.highestRole, // Use first role for color, fallback to highest role
                       }}
                       profile={profile}
                       server={server}
@@ -255,12 +281,13 @@ export const MemberSidebar = ({
               <div className="w-full">
                 {groupedMembers.offlineMembers.map((member: any) => {
                   const memberId = member._id || member.id;
+                  // For offline members, use highest role (by position) for color (hoisted or non-hoisted)
                   return (
                     <ServerMember
                       key={memberId}
                       member={{
                         ...member,
-                        roleData: member.highestRole, // Pass highest role for color
+                        roleData: member.colorRole || member.highestRole, // Use highest role for color
                       }}
                       profile={profile}
                       server={server}

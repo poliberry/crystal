@@ -1607,6 +1607,18 @@
     "@tanstack/query-core" "4.41.0"
     use-sync-external-store "^1.2.0"
 
+"@tauri-apps/api@^2.8.0":
+  version "2.9.1"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/api/-/api-2.9.1.tgz#e539bfa437e53864fd5e7ed0f28e8217fbc74de1"
+  integrity sha512-IGlhP6EivjXHepbBic618GOmiWe4URJiIeZFlB7x3czM0yDHHYviH1Xvoiv4FefdkQtn6v7TuwWCRfOGdnVUGw==
+
+"@tauri-apps/plugin-notification@^2.3.3":
+  version "2.3.3"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-notification/-/plugin-notification-2.3.3.tgz#01581e3abd3bd18200121b213d3e6ebff2967fe2"
+  integrity sha512-Zw+ZH18RJb41G4NrfHgIuofJiymusqN+q8fGUIIV7vyCH+5sSn5coqRv/MWB9qETsUs97vmU045q7OyseCV3Qg==
+  dependencies:
+    "@tauri-apps/api" "^2.8.0"
+
 "@tsconfig/node10@^1.0.7":
   version "1.0.12"
   resolved "https://registry.yarnpkg.com/@tsconfig/node10/-/node10-1.0.12.tgz#be57ceac1e4692b41be9de6be8c32a106636dba4"
