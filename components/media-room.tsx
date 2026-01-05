@@ -132,6 +132,7 @@ import {
   Camera,
   CameraOff,
   ChevronUp,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -1351,22 +1352,36 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                           </div>
                         </div>
                         {/* Volume control for active screenshare */}
-                        <div className="absolute top-2 right-2 bg-black/70 rounded-lg p-2 flex items-center gap-2">
-                          <Volume2 className="w-4 h-4 text-white" />
-                          <input
-                            type="range"
-                            min="0"
-                            max="0.5"
-                            step="0.01"
-                            value={screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5}
-                            onChange={(e) => {
+                        <div className="absolute top-2 right-2 bg-black/70 rounded-lg p-2 flex flex-col items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-white hover:bg-white/20"
+                            onClick={(e) => {
                               e.stopPropagation();
-                              const newVolume = parseFloat(e.target.value);
+                              const currentVolume = screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5;
+                              const newVolume = Math.min(0.5, currentVolume + 0.05);
                               setScreenshareVolume(activeScreenShare.publication.trackSid, newVolume);
                             }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-20 h-1"
-                          />
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </Button>
+                          <span className="text-sm text-white font-medium min-w-[3rem] text-center">
+                            {Math.round((screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5) * 100)}%
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-white hover:bg-white/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const currentVolume = screenshareVolumes[activeScreenShare.publication.trackSid] ?? 0.5;
+                              const newVolume = Math.max(0, currentVolume - 0.05);
+                              setScreenshareVolume(activeScreenShare.publication.trackSid, newVolume);
+                            }}
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1746,21 +1761,34 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                                     {/* Volume control */}
                                     {isSubscribed && (
                                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <div className="bg-black/70 rounded-lg p-1 flex items-center gap-1">
-                                          <Volume2 className="w-3 h-3 text-white" />
-                                          <input
-                                            type="range"
-                                            min="0"
-                                            max="0.5"
-                                            step="0.01"
-                                            value={volume}
-                                            onChange={(e) => {
+                                        <div className="bg-black/70 rounded-lg p-1 flex flex-col items-center gap-0.5">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 w-4 p-0 text-white hover:bg-white/20"
+                                            onClick={(e) => {
                                               e.stopPropagation();
-                                              setScreenshareVolume(track.publication.trackSid, parseFloat(e.target.value));
+                                              const newVolume = Math.min(0.5, volume + 0.05);
+                                              setScreenshareVolume(track.publication.trackSid, newVolume);
                                             }}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="w-16 h-1"
-                                          />
+                                          >
+                                            <ChevronUp className="w-3 h-3" />
+                                          </Button>
+                                          <span className="text-xs text-white min-w-[2rem] text-center">
+                                            {Math.round(volume * 100)}%
+                                          </span>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 w-4 p-0 text-white hover:bg-white/20"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const newVolume = Math.max(0, volume - 0.05);
+                                              setScreenshareVolume(track.publication.trackSid, newVolume);
+                                            }}
+                                          >
+                                            <ChevronDown className="w-3 h-3" />
+                                          </Button>
                                         </div>
                                       </div>
                                     )}
