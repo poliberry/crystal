@@ -16,6 +16,50 @@ import { FloatingCallCard } from "../call-ui";
 // Detect if running in Tauri
 const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
 
+// Patch LiveKit's browser detection for WebKit/Tauri compatibility
+if (typeof window !== "undefined" && isTauri) {
+  // Ensure WebRTC APIs are available - try webkit prefix
+  if (!window.RTCPeerConnection) {
+    if ((window as any).webkitRTCPeerConnection) {
+      (window as any).RTCPeerConnection = (window as any).webkitRTCPeerConnection;
+    }
+    // Also try to ensure RTCSessionDescription and RTCIceCandidate
+    if (!window.RTCSessionDescription && (window as any).webkitRTCSessionDescription) {
+      (window as any).RTCSessionDescription = (window as any).webkitRTCSessionDescription;
+    }
+    if (!window.RTCIceCandidate && (window as any).webkitRTCIceCandidate) {
+      (window as any).RTCIceCandidate = (window as any).webkitRTCIceCandidate;
+    }
+  }
+  
+  // Patch window.onerror to catch and suppress LiveKit browser detection errors
+  const originalOnError = window.onerror;
+  window.onerror = function(message, source, lineno, colno, error) {
+    const messageStr = message?.toString() || "";
+    if (messageStr.includes("LiveKit doesn't seem to be supported") || 
+        messageStr.includes("webRTC") ||
+        messageStr.includes("WebRTC")) {
+      console.warn("LiveKit browser detection warning (suppressed for Tauri/WebKit):", message);
+      return true; // Suppress the error
+    }
+    if (originalOnError) {
+      return originalOnError.call(window, message, source, lineno, colno, error);
+    }
+    return false;
+  };
+  
+  // Also patch unhandled promise rejections
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason?.toString() || "";
+    if (reason.includes("LiveKit doesn't seem to be supported") || 
+        reason.includes("webRTC") ||
+        reason.includes("WebRTC")) {
+      console.warn("LiveKit browser detection warning (suppressed for Tauri/WebKit):", event.reason);
+      event.preventDefault(); // Suppress the error
+    }
+  });
+}
+
 interface LiveKitContextType {
   join: (
     room: string,
