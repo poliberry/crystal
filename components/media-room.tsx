@@ -1668,7 +1668,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
 
 
   return (
-    <div className="w-full h-screen bg-[url('/background-light.png')] dark:bg-[url('/background-dark.png')] bg-cover bg-center">
+    <div className="w-full h-screen bg-background bg-cover bg-center">
       <ChatHeader
         name={channel.name}
         serverId={server?.id}
