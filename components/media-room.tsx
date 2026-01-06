@@ -1159,34 +1159,35 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
               audioTrack.enabled = true;
               audioTrack.addEventListener('ended', onTrackEnd);
 
-              // Create a test audio element to verify audio is working
+              // Create a test audio element for debugging only. Do NOT auto-play or append it to the DOM
+              // to avoid duplicate playback across the UI which causes amplification/distortion.
               const testAudio = document.createElement('audio');
               testAudio.srcObject = audioStream;
-              testAudio.autoplay = true;
-              testAudio.volume = 1.0; // Full volume for testing
+              testAudio.autoplay = false;
+              testAudio.volume = 1.0;
               testAudio.muted = false;
 
-              // Try to play immediately
-              testAudio.play().then(() => {
-                console.log('Test audio element started playing');
-              }).catch(err => {
-                console.error('Failed to play test audio:', err);
-              });
+              // Expose debug controls only when explicitly enabled
+              if ((window as any).DEBUG_AUDIO) {
+                try {
+                  document.body.appendChild(testAudio);
+                } catch (e) {
+                  console.warn('Unable to append debug audio element:', e);
+                }
 
-              document.body.appendChild(testAudio);
+                // Log play/pause/error events when debug audio is enabled
+                testAudio.addEventListener('play', () => {
+                  console.log('Test audio element is playing');
+                });
 
-              // Monitor audio element state
-              testAudio.addEventListener('play', () => {
-                console.log('Test audio element is playing');
-              });
+                testAudio.addEventListener('pause', () => {
+                  console.log('Test audio element paused');
+                });
 
-              testAudio.addEventListener('pause', () => {
-                console.log('Test audio element paused');
-              });
-
-              testAudio.addEventListener('error', (e) => {
-                console.error('Test audio element error:', e);
-              });
+                testAudio.addEventListener('error', (e) => {
+                  console.error('Test audio element error:', e);
+                });
+              }
 
               // Log test audio element
               console.log('Created test audio element to verify audio stream', {
@@ -2611,7 +2612,7 @@ function UserAudioElement({
   );
 }
 
-// Screenshare Audio Element Component - handles volume updates properly
+// Screenshare Audio Element Component - handles volume updates properly and prevents duplicate playback
 function ScreenshareAudioElement({
   track,
   trackSid,
@@ -2632,27 +2633,61 @@ function ScreenshareAudioElement({
   const currentVolume = screenshareVolumes[trackSid] ?? volume;
   const clampedVolume = Math.max(0, Math.min(0.5, currentVolume));
 
-  // Update volume whenever screenshareVolumes changes
+  // If there's already an audio element registered for this screenshare track, don't render a duplicate.
+  // Update the existing element with the latest volume/mute state.
   useEffect(() => {
-    if (audioRef.current) {
-      const latestVolume = screenshareVolumes[trackSid] ?? volume;
-      const latestClamped = Math.max(0, Math.min(0.5, latestVolume));
-      audioRef.current.volume = latestClamped;
-      audioRef.current.muted = latestClamped === 0 || isLocalScreenshare;
+    const existing = audioElementRefs.current[`screenshare-${trackSid}`];
+    if (existing && existing !== audioRef.current) {
+      existing.volume = clampedVolume;
+      existing.muted = clampedVolume === 0 || isLocalScreenshare;
     }
-  }, [screenshareVolumes, trackSid, volume, isLocalScreenshare]);
+  }, [screenshareVolumes, trackSid, volume, isLocalScreenshare, audioElementRefs]);
+
+  // Attach track to element when we are the owner (no existing element present)
+  useEffect(() => {
+    const key = `screenshare-${trackSid}`;
+    const el = audioRef.current;
+    const existing = audioElementRefs.current[key];
+
+    // If there's an existing owner and it's not us, bail out (we won't render an audio element)
+    if (existing && existing !== el) {
+      return;
+    }
+
+    if (!el) return;
+
+    // Register ourselves as the owner
+    audioElementRefs.current[key] = el;
+
+    if (track.publication.track) {
+      try {
+        track.publication.track.attach(el);
+      } catch (e) {
+        console.warn('Failed to attach screenshare audio track to element:', e);
+      }
+    }
+
+    // Set volume/mute
+    el.volume = clampedVolume;
+    el.muted = clampedVolume === 0 || isLocalScreenshare;
+
+    return () => {
+      // Clean up ownership if we're the registered owner
+      if (audioElementRefs.current[key] === el) {
+        delete audioElementRefs.current[key];
+      }
+    };
+  }, [track, trackSid, clampedVolume, isLocalScreenshare, audioElementRefs]);
+
+  // If another element already exists for this track, don't render a duplicate audio tag
+  if (audioElementRefs.current[`screenshare-${trackSid}`] && audioElementRefs.current[`screenshare-${trackSid}`] !== audioRef.current) {
+    return null;
+  }
 
   return (
     <audio
       ref={(el) => {
         audioRef.current = el;
-        if (el && track.publication.track) {
-          track.publication.track.attach(el);
-          audioElementRefs.current[`screenshare-${trackSid}`] = el;
-          // Set initial volume
-          el.volume = clampedVolume;
-          el.muted = clampedVolume === 0 || isLocalScreenshare;
-        }
       }}
       autoPlay
       playsInline
