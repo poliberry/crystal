@@ -1,9 +1,10 @@
 "use node";
 
-import { action } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { AccessToken } from "livekit-server-sdk";
+import { getCurrentProfile, requireProfile } from "./lib/helpers";
 
 // Get LiveKit access token
 export const getToken = action({
@@ -52,8 +53,6 @@ export const getToken = action({
   },
 });
 
-// Get room participants (requires LiveKit server SDK)
-// Note: This requires the LiveKit server SDK which needs to run server-side
-// For now, we'll keep the API route for this, but you can migrate it to Convex actions
-// if you set up the LiveKit server SDK properly in Convex
+// Voice participant tracking moved to `convex/voiceParticipants.ts` to avoid defining queries in Node runtime
+
 

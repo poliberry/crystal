@@ -97,6 +97,9 @@ export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
     // If disabling, just turn off screen share
     if (localParticipant.isScreenShareEnabled) {
       await localParticipant.setScreenShareEnabled(false);
+      try {
+        new Audio('/sounds/sc-stop.mp3').play().catch(() => {});
+      } catch (e) {}
       return;
     }
 

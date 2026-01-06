@@ -91,6 +91,9 @@ export const CompactCallUI = ({
     const isEnabled = localParticipant.isScreenShareEnabled;
     if (isEnabled) {
       localParticipant.setScreenShareEnabled(false);
+      try {
+        new Audio('/sounds/sc-stop.mp3').play().catch(() => {});
+      } catch (e) {}
     } else {
       localParticipant.setScreenShareEnabled(true, {
         audio: true

@@ -152,6 +152,8 @@ import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import "@livekit/components-styles";
 import { FloatingCallCard } from "./call-ui";
 import { useLiveKit } from "./providers/media-room-provider";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Track } from "livekit-client";
 import { Channel, Server } from "@/types/conversation";
@@ -211,6 +213,19 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const { localParticipant } = useLocalParticipant();
   const { isElectron, virtualDevice, createVirtualMic } = useVirtualAudio();
   const remoteParticipants = useRemoteParticipants();
+
+  // Convex mutations to keep voice participant records updated
+  const upsertParticipant = useMutation((api as any).voiceParticipants.upsertParticipant);
+  const removeParticipant = useMutation((api as any).voiceParticipants.removeParticipant);
+  const prevRemoteRef = useRef<Record<string, boolean>>({});
+  const prevScreenshareOwnersRef = useRef<Record<string, boolean>>({});
+
+  // Audio cues for join/leave/screenshare
+  const joinAudioRef = useRef<HTMLAudioElement | null>(null);
+  const leaveAudioRef = useRef<HTMLAudioElement | null>(null);
+  const screenshareStartRef = useRef<HTMLAudioElement | null>(null);
+  const screenshareStopRef = useRef<HTMLAudioElement | null>(null);
+
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
@@ -322,6 +337,94 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
       }
     });
   }, [remoteParticipants, localParticipant]);
+
+  // Sync remote participants to Convex so server/channel lists can subscribe
+  useEffect(() => {
+    const roomName = livekit.roomName;
+    if (!roomName) return;
+
+    const currentIds = new Set(remoteParticipants.map((p) => p.identity));
+
+    // Upsert current remote participants
+    remoteParticipants.forEach((p) => {
+      try {
+        const metadata = p.metadata ? JSON.parse(p.metadata) : {};
+        upsertParticipant({
+          roomName,
+          identity: p.identity,
+          avatar: metadata.avatar ?? null,
+          isSpeaking: (p as any).isSpeaking ?? false,
+          userId: metadata.userId ?? null,
+        }).catch((e) => console.warn("upsert remote participant failed", e));
+      } catch (e) {
+        upsertParticipant({
+          roomName,
+          identity: p.identity,
+          avatar: undefined,
+          isSpeaking: (p as any).isSpeaking ?? false,
+        }).catch(() => {});
+      }
+    });
+
+    // Detect joins and leaves (but skip audio on initial load)
+    const prevIds = new Set(Object.keys(prevRemoteRef.current));
+    const hadPrev = prevIds.size > 0;
+
+    if (hadPrev) {
+      const joined = Array.from(currentIds).filter((id) => !prevIds.has(id));
+      const left = Array.from(prevIds).filter((id) => !currentIds.has(id));
+
+      // Play join audio for new participants (exclude self)
+      joined.forEach((id) => {
+        if (id === localParticipant?.identity) return;
+        try {
+          joinAudioRef.current?.play().catch(() => {});
+        } catch (e) {}
+      });
+
+      // Play leave audio for participants that left (exclude self)
+      left.forEach((id) => {
+        if (id === localParticipant?.identity) return;
+        try {
+          leaveAudioRef.current?.play().catch(() => {});
+        } catch (e) {}
+      });
+    }
+
+    // Remove participants that disappeared
+    Object.keys(prevRemoteRef.current).forEach((id) => {
+      if (!currentIds.has(id)) {
+        removeParticipant({ roomName, identity: id }).catch((e) =>
+          console.warn("remove remote participant failed", e)
+        );
+      }
+    });
+
+    // Update previous set
+    prevRemoteRef.current = Array.from(currentIds).reduce((acc, id) => {
+      acc[id] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+  }, [remoteParticipants, livekit.roomName, localParticipant]);
+
+  // Initialize audio elements for cues
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    joinAudioRef.current = new Audio("/sounds/join.ogg");
+    leaveAudioRef.current = new Audio("/sounds/leave.ogg");
+    screenshareStartRef.current = new Audio("/sounds/sc-start.mp3");
+    screenshareStopRef.current = new Audio("/sounds/sc-stop.mp3");
+
+    [joinAudioRef, leaveAudioRef, screenshareStartRef, screenshareStopRef].forEach((ref) => {
+      if (ref.current) {
+        ref.current.preload = "auto";
+        try {
+          ref.current.volume = 0.9;
+        } catch (e) {}
+      }
+    });
+  }, []);
 
 
 
@@ -515,6 +618,10 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         if (window.CrystalNative && window.CrystalNative.platform.isLinux()) {
           await window.CrystalNative.audio.stopCapture();
         }
+        // Play screen share stop sound for local stop
+        try {
+          screenshareStopRef.current?.play().catch(() => {});
+        } catch (e) {}
       } catch (err) {
         console.error('Failed to disable screen share:', err);
       }
@@ -1350,6 +1457,10 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         audio: true
       });
     }
+
+    // Play screen share start sound
+    const screen_share_start = new Audio("/sounds/sc-start.mp3");
+    screen_share_start.play();
   };
 
   const disconnectCall = async () => {
@@ -1431,6 +1542,43 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
       return changed ? newSet : prev;
     });
   }, [allTracks]);
+
+  // Detect remote screenshare start/stop and play audio cues
+  useEffect(() => {
+    const currentScreenshares = new Set(
+      allTracks
+        .filter((t) => t.publication.source === Track.Source.ScreenShare)
+        .map((t) => t.participant.identity)
+    );
+
+    const prev = new Set(Object.keys(prevScreenshareOwnersRef.current));
+    const hadPrev = prev.size > 0;
+
+    if (hadPrev) {
+      const started = Array.from(currentScreenshares).filter((id) => !prev.has(id));
+      const stopped = Array.from(prev).filter((id) => !currentScreenshares.has(id));
+
+      started.forEach((id) => {
+        if (id === localParticipant?.identity) return;
+        try {
+          screenshareStartRef.current?.play().catch(() => {});
+        } catch (e) {}
+      });
+
+      stopped.forEach((id) => {
+        if (id === localParticipant?.identity) return;
+        try {
+          screenshareStopRef.current?.play().catch(() => {});
+        } catch (e) {}
+      });
+    }
+
+    // Update previous screenshare owner set
+    prevScreenshareOwnersRef.current = Array.from(currentScreenshares).reduce((acc, id) => {
+      acc[id] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+  }, [allTracks, localParticipant]);
 
   // Filter for screen shares only
   const screenShareTracks = allTracks

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { ConversationType, Profile, Conversation } from "@/types/conversation";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatInput } from "@/components/chat/chat-input";
@@ -29,46 +31,17 @@ export function ConversationLayout({
   currentProfile,
 }: ConversationLayoutProps) {
   const searchParams = useSearchParams();
-  const [activeParticipants, setActiveParticipants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const conversationId = conversation._id || conversation.id;
+  const participants = useQuery(
+    api.voiceParticipants.getParticipants,
+    conversationId ? { roomName: `conversation-${conversationId}` } : "skip"
+  );
 
+  const isLoading = typeof participants === "undefined";
   // Check if user is in a call
   const isInCall = searchParams?.get('audio') === 'true' || searchParams?.get('video') === 'true';
   const isExpanded = searchParams?.get('expanded') === 'true';
-  const hasActiveCall = activeParticipants.length > 0;
-
-  // Check for active participants in the room
-  useEffect(() => {
-    const conversationId = conversation._id || conversation.id;
-    if (!conversationId) {
-      setIsLoading(false);
-      return;
-    }
-
-    const checkActiveCall = async () => {
-      try {
-        const response = await fetch(`/api/rooms?room=conversation-${conversationId}`);
-        if (response.ok) {
-          const participants = await response.json();
-          setActiveParticipants(Array.isArray(participants) ? participants : []);
-        } else {
-          setActiveParticipants([]);
-        }
-      } catch (error) {
-        console.log("Error checking active call:", error);
-        setActiveParticipants([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkActiveCall();
-    
-    // Poll for active call status every 5 seconds
-    const interval = setInterval(checkActiveCall, 5000);
-    
-    return () => clearInterval(interval);
-  }, [conversation._id, conversation.id]);
+  const hasActiveCall = participants && participants.length > 0;
 
   // If user is actively in a call and wants expanded view, render the expanded call UI
   if (isInCall && isExpanded) {
@@ -173,7 +146,7 @@ export function ConversationLayout({
             conversationName={conversationName}
             conversationType={conversation.type}
             otherMember={otherMember}
-            participantCount={activeParticipants.length}
+            participantCount={participants ? participants.length : 0}
           />
         )}
 

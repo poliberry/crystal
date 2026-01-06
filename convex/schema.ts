@@ -114,6 +114,29 @@ export default defineSchema({
     .index("by_categoryId", ["categoryId"])
     .index("by_serverId_categoryId", ["serverId", "categoryId"]),
 
+  // Voice participants tracked for server/channel audio rooms (LiveKit rooms)
+  voiceParticipants: defineTable({
+    // LiveKit room name (e.g., channel.id)
+    roomName: v.string(),
+    // Optional Convex channel id reference
+    channelId: v.optional(v.id("channels")),
+    // Optional profile reference
+    profileId: v.optional(v.id("profiles")),
+    // Optional external user id (app userId)
+    userId: v.optional(v.string()),
+    // The display identity shown in LiveKit
+    identity: v.string(),
+    // Avatar URL if provided
+    avatar: v.optional(v.string()),
+    // Whether the participant is currently speaking
+    isSpeaking: v.boolean(),
+    // Last update time (ms since epoch)
+    lastSeenAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_roomName", ["roomName"])
+    .index("by_channelId", ["channelId"]),
+
   attachments: defineTable({
     utId: v.string(),
     name: v.string(),

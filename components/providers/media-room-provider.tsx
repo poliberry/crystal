@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useTheme } from "next-themes";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -126,6 +126,11 @@ export const LiveKitProvider = ({
 
   const getToken = useAction(api.livekit.getToken);
 
+  // Convex mutations for participant tracking
+  const upsertParticipant = useMutation((api as any).voiceParticipants.upsertParticipant);
+  const removeParticipant = useMutation((api as any).voiceParticipants.removeParticipant);
+  const heartbeatRef = useRef<number | null>(null);
+
   // Check WebRTC availability before rendering LiveKitRoom
   useEffect(() => {
     const checkWebRTC = () => {
@@ -218,7 +223,34 @@ export const LiveKitProvider = ({
       setAudio(audio);
       setVideo(video);
       setConnected(true);
-      
+
+      // Upsert participant record in Convex and start heartbeat to keep it alive
+      try {
+        await upsertParticipant({
+          roomName: roomId,
+          identity: name,
+          avatar: profile?.imageUrl ?? undefined,
+          userId: user?.userId ?? null,
+          isSpeaking: false,
+        });
+
+        // Heartbeat every 15s to refresh lastSeenAt
+        if (heartbeatRef.current) {
+          clearInterval(heartbeatRef.current);
+        }
+        heartbeatRef.current = window.setInterval(() => {
+          upsertParticipant({
+            roomName: roomId,
+            identity: name,
+            avatar: profile?.imageUrl ?? undefined,
+            userId: user?.userId ?? null,
+            isSpeaking: false,
+          }).catch((e) => console.warn("Heartbeat upsert failed", e));
+        }, 15000) as unknown as number;
+      } catch (e) {
+        console.warn("Failed to upsert participant on join", e);
+      }
+
       // Real-time updates handled by Convex
       call_connecting.pause();
       call_connected.play();
@@ -249,6 +281,21 @@ export const LiveKitProvider = ({
   };
 
   const leave = async () => {
+    // Remove participant from Convex and stop heartbeat
+    try {
+      const name = profile?.globalName ?? profile?.name;
+      if (name) {
+        await removeParticipant({ roomName: room ?? "", identity: name, userId: user?.userId ?? null });
+      }
+    } catch (e) {
+      console.warn("Failed to remove participant on leave", e);
+    }
+
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+
     // Real-time updates handled by Convex
     setConnected(false);
     setRoom(null);

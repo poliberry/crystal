@@ -39,6 +39,12 @@
 
 ## ✅ Convex Functions Created
 
+### LiveKit / Voice Participants (`convex/livekit.ts`)
+- `upsertParticipant` - Create or refresh a voice participant record with fields: `roomName`, `channelId`, `userId`, `identity`, `avatar`, `isSpeaking`, `lastSeenAt` ✅
+- `removeParticipant` - Remove a voice participant record on leave/disconnect ✅
+- `getParticipants` - Query active participants for a room (filters out stale entries automatically) ✅
+
+
 ### Profiles (`convex/profiles.ts`)
 - `getCurrent` - Get current user's profile
 - `getById` - Get profile by ID

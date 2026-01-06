@@ -58,7 +58,12 @@ export const ServerChannel = ({
   const router = useRouter();
   const { user } = useAuthStore();
   const media = useLiveKit();
-  const [users, setUsers] = useState<any[]>([]);
+
+  // Subscribe to voice participants via Convex instead of polling LiveKit API
+  const participants = useQuery(
+    api.voiceParticipants.getParticipants,
+    channel.type === "AUDIO" ? { roomName: channel.id } : "skip"
+  );
 
   // Check if channel is muted
   const isChannelMuted = useQuery(
@@ -70,25 +75,6 @@ export const ServerChannel = ({
 
   const muteChannel = useMutation(api.mutedChannels.mute);
   const unmuteChannel = useMutation(api.mutedChannels.unmute);
-
-  // Get connected users from LiveKit API route (not socket)
-  const getConnectedUsers = async () => {
-    const res = await fetch(`/api/rooms?room=${channel.id}`);
-    const data = await res.json();
-    setUsers(data);
-  };
-
-  useEffect(() => {
-    if (channel.type === "AUDIO") {
-      getConnectedUsers();
-      // Poll for updates instead of socket events
-      const interval = setInterval(() => {
-        getConnectedUsers();
-      }, 5000); // Poll every 5 seconds
-
-      return () => clearInterval(interval);
-    }
-  }, [channel.id, channel.type]);
 
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
@@ -208,23 +194,15 @@ export const ServerChannel = ({
               {media.connected &&
                 channel.type === "AUDIO" &&
                 media.roomName !== channel.name &&
-                users.length > 0 && (
+                participants &&
+                participants.length > 0 && (
                   <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground px-2 pb-2">
-                    {users.map((user) => {
-                      const metadata = user.metadata
-                        ? JSON.parse(user.metadata)
-                        : {};
+                    {participants.map((p: any) => {
+                      const image = p.avatar ?? p.profile?.imageUrl ?? null;
                       return (
-                        <div
-                          key={user.identity}
-                          className="flex items-center gap-1"
-                        >
-                          <AvatarCard
-                            name={user.identity}
-                            image={metadata.avatar}
-                            isSpeaking={user.isSpeaking}
-                          />
-                          <span>{user.identity}</span>
+                        <div key={p.identity} className="flex items-center gap-1">
+                          <AvatarCard name={p.identity} image={image} isSpeaking={p.isSpeaking} />
+                          <span>{p.identity}</span>
                         </div>
                       );
                     })}
@@ -232,23 +210,15 @@ export const ServerChannel = ({
                 )}
               {!media.connected &&
                 channel.type === "AUDIO" &&
-                users.length > 0 && (
+                participants &&
+                participants.length > 0 && (
                   <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground px-2 pb-2">
-                    {users.map((user) => {
-                      const metadata = user.metadata
-                        ? JSON.parse(user.metadata)
-                        : {};
+                    {participants.map((p: any) => {
+                      const image = p.avatar ?? p.profile?.imageUrl ?? null;
                       return (
-                        <div
-                          key={user.identity}
-                          className="flex items-center gap-1"
-                        >
-                          <AvatarCard
-                            name={user.identity}
-                            image={metadata.avatar}
-                            isSpeaking={user.isSpeaking}
-                          />
-                          <span>{user.identity}</span>
+                        <div key={p.identity} className="flex items-center gap-1">
+                          <AvatarCard name={p.identity} image={image} isSpeaking={p.isSpeaking} />
+                          <span>{p.identity}</span>
                         </div>
                       );
                     })}

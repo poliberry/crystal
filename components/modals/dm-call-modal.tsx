@@ -50,9 +50,9 @@ export const DMCallModal = () => {
 
       if (shouldReceiveCallAlerts(statusObj)) {
         // Create audio element
-        audioRef.current = new Audio("/sounds/incoming-call.ogg");
+        audioRef.current = new Audio("/sounds/incomg-call.wav");
         audioRef.current.loop = true;
-        audioRef.current.volume = 0.7;
+        audioRef.current.volume = 0.5;
 
         // Play the sound
         audioRef.current.play().catch((error) => {

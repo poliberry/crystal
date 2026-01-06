@@ -29,6 +29,7 @@ import type * as servers from "../servers.js";
 import type * as typingIndicators from "../typingIndicators.js";
 import type * as userCustomisation from "../userCustomisation.js";
 import type * as userStatus from "../userStatus.js";
+import type * as voiceParticipants from "../voiceParticipants.js";
 
 import type {
   ApiFromModules,
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   typingIndicators: typeof typingIndicators;
   userCustomisation: typeof userCustomisation;
   userStatus: typeof userStatus;
+  voiceParticipants: typeof voiceParticipants;
 }>;
 
 /**
