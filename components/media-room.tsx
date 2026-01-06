@@ -1913,7 +1913,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
               )}
 
               {activeScreenShare && (
-                <div className="relative w-full h-full overflow-hidden border border-border">
+                <div className="relative w-full sm:h-[48vmin] md:h-[64vmin] lg:h-[69vmin] overflow-hidden border border-border">
                   <div
                     className="w-full h-full cursor-pointer"
                     onClick={() => {
