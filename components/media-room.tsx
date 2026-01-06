@@ -668,7 +668,9 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
           includeSources: any,
           excludeSources: any,
           sourceId: string,
-          onTrackEnd: () => void
+          onTrackEnd: () => void,
+          preferredMic?: string,
+          preferredOutput?: string
         ): Promise<MediaStream | null> => {
           if (!window.CrystalNative) {
             console.error('CrystalNative not available');
@@ -732,7 +734,9 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
             // Start virtual microphone via IPC
             const result = await window.CrystalNative.audio.startCapture({
               includeSources,
-              excludeSources
+              excludeSources,
+              preferredMic: preferredMic,
+              preferredOutput: preferredOutput
             });
 
             if (!result.ok) {
@@ -1354,7 +1358,9 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
             choice.includeSources,
             choice.excludeSources,
             choice.id,
-            handleTrackEnd
+            handleTrackEnd,
+            choice.preferredMic,
+            choice.preferredOutput
           );
 
           if (audioStream) {
