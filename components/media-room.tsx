@@ -1190,7 +1190,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         if (isMacOS && systemDisplayStream) {
           // Use the video track from system picker
           videoStream = systemDisplayStream;
-          videoTrack = systemDisplayStream!.getVideoTracks()[0];
+          videoTrack = (systemDisplayStream as any).getVideoTracks()[0];
 
           if (!videoTrack) {
             throw new Error('No video track available from system picker');
@@ -1241,7 +1241,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
 
         // Capture and publish audio based on platform
         if (isLinux && (choice.audio || (choice.includeSources && choice.includeSources !== "None"))) {
-          // Linux: Try native PipeWire first, then fall back to venmic
+          // Linux: Try native PipeWire first, then fall back to virtual mic (pw-cli / pw-loopback)
           const audioStream = await captureLinuxAudio(
             choice.includeSources,
             choice.excludeSources,
@@ -1276,7 +1276,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         } else if (choice.audio && isMacOS) {
           // macOS: Use audio tracks directly from system picker
           if (systemDisplayStream) {
-            const audioTracks = systemDisplayStream!.getAudioTracks();
+            const audioTracks = (systemDisplayStream as any).getAudioTracks();
             if (audioTracks.length > 0) {
               // Create separate audio stream from system picker tracks
               const audioStream = new MediaStream(audioTracks);
