@@ -48,6 +48,56 @@ import {
 } from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
 
+declare namespace Vesktop {
+  interface AudioNode {
+    "application.name"?: string;
+    "application.process.binary"?: string;
+    "application.process.id"?: string;
+    "node.name"?: string;
+    "media.class"?: string;
+    "media.name"?: string;
+    "device.id"?: string;
+  }
+}
+
+interface CrystalDesktopBridge {
+  isVesktop: boolean;
+  virtmic?: {
+    list(): Promise<{
+      ok: boolean;
+      targets: Vesktop.AudioNode[];
+      hasPipewirePulse: boolean;
+    }>;
+    start(includeSources: Vesktop.AudioNode[]): Promise<void>;
+    startSystem(excludeSources: Vesktop.AudioNode[]): Promise<void>;
+    stop(): Promise<void>;
+  };
+  platform?: {
+    get(): string;
+    isWindows(): boolean;
+    isLinux(): boolean;
+    isMacOS(): boolean;
+  };
+}
+
+declare global {
+  interface Window {
+    CrystalDesktop?: CrystalDesktopBridge;
+    VesktopNative?: {
+      screenShare: {
+        openPickerWindow(
+          skipPicker?: boolean
+        ): Promise<{
+          id: string;
+          contentHint?: string;
+          audio?: boolean;
+          includeSources?: "None" | "Entire System" | Vesktop.AudioNode[];
+          excludeSources?: "None" | "Entire System" | Vesktop.AudioNode[];
+        } | null>;
+    };
+  }
+}
+
 type MediaRoomProps = {
   conversation: Conversation;
   otherMember?: Profile; // Optional for group conversations
@@ -60,16 +110,19 @@ export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
   const [activeScreenShare, setActiveScreenShare] = useState<any>(null);
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
+
+  const isVesktop =
+    typeof window !== "undefined" && !!window.CrystalDesktop?.isVesktop;
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
 
   // Determine display info based on conversation type
-  const conversationName = conversation.type === ConversationType.GROUP_MESSAGE 
-    ? (conversation.name || "Group Call") 
+  const conversationName = conversation.type === ConversationType.GROUP_MESSAGE
+    ? (conversation.name || "Group Call")
     : (otherMember?.globalName || otherMember?.name || "Unknown User");
-  
-  const conversationImageUrl = conversation.type === ConversationType.GROUP_MESSAGE 
+
+  const conversationImageUrl = conversation.type === ConversationType.GROUP_MESSAGE
     ? "" // Could add a default group icon
     : (otherMember?.imageUrl || "");
 
@@ -94,92 +147,221 @@ export const DMMediaRoom = ({ conversation, otherMember }: MediaRoomProps) => {
   };
 
   const toggleScreenShare = async () => {
-    // If disabling, just turn off screen share
+    if (!localParticipant) return;
+
+    // If disabling, just turn off screen share and stop any ongoing capture
     if (localParticipant.isScreenShareEnabled) {
       await localParticipant.setScreenShareEnabled(false);
       try {
-        new Audio('/sounds/sc-stop.mp3').play().catch(() => {});
+        // If Vesktop virtmic is running, stop it
+        if (
+          typeof window !== "undefined" &&
+          window.CrystalDesktop?.virtmic &&
+          window.CrystalDesktop.platform?.isLinux()
+        ) {
+          await window.CrystalDesktop.virtmic.stop();
+        }
+      } catch (e) {
+        console.warn("Failed to stop Vesktop virtmic for DM screenshare:", e);
+      }
+      try {
+        new Audio("/sounds/sc-stop.mp3").play().catch(() => {});
       } catch (e) {}
       return;
     }
 
-    // If running in the Electron wrapper, use desktop picker + system audio
-    if (typeof window !== 'undefined' && (window as any).desktopAPI) {
+    // Prefer Vesktop screen share picker and audio capture when running inside Vesktop
+    if (typeof window !== "undefined" && isVesktop && window.VesktopNative) {
       try {
-        // For macOS, check screen recording permission
-        if (process.platform === 'darwin') {
-          const checkPermission = await (window as any).desktopAPI.checkScreenRecordingPermission();
-          if (!checkPermission.granted) {
-            const requestPermission = await (window as any).desktopAPI.requestScreenRecordingPermission();
-            if (!requestPermission.granted) {
-              window.alert('Screen recording permission is required to share your screen. Please enable it in System Preferences > Security & Privacy > Screen Recording.');
-              return;
-            }
-          }
+        const platform = window.CrystalDesktop?.platform?.get() ?? "browser";
+        const isLinux = window.CrystalDesktop?.platform?.isLinux?.() ?? false;
+        const isWindows = window.CrystalDesktop?.platform?.isWindows?.() ?? false;
+        const isMacOS = window.CrystalDesktop?.platform?.isMacOS?.() ?? false;
+
+        // Use Vesktop's built-in screen share picker (same UI as Discord in Vesktop)
+        const choice = await window.VesktopNative.screenShare.openPickerWindow(
+          false
+        );
+
+        if (!choice) {
+          // User cancelled
+          return;
         }
 
-        // Get screen/window sources
-        const sources = await (window as any).desktopAPI.getSources({ types: ['screen', 'window'] });
-        if (!sources || sources.length === 0) {
-          throw new Error('No screen sources available');
-        }
-
-        let videoTrack: MediaStreamTrack | undefined;
-        
-        // Create video track from selected source
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
+        // Get video stream from selected source
+        const videoStream = await navigator.mediaDevices.getUserMedia({
           video: {
             mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: sources[0].id // In production, show UI for source selection
-            }
-          } as any
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: choice.id,
+            },
+          } as any,
+          audio: false,
         });
-        
-        videoTrack = stream.getVideoTracks()[0];
 
-        // Publish the screen video track
-        if (videoTrack) {
-          await localParticipant.publishTrack(videoTrack, {
-            source: Track.Source.ScreenShare
-          });
+        const videoTrack = videoStream.getVideoTracks()[0];
+        if (!videoTrack) {
+          throw new Error("No video track from Vesktop screen share picker");
         }
 
-        // Try to capture system audio
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              mandatory: {
-                chromeMediaSource: 'desktop'
+        // Publish the screen video track to LiveKit
+        await localParticipant.publishTrack(videoTrack, {
+          source: Track.Source.ScreenShare,
+        });
+
+        const audioStreams: MediaStream[] = [];
+
+        const handleTrackEnd = async () => {
+          try {
+            if (
+              typeof window !== "undefined" &&
+              window.CrystalDesktop?.virtmic &&
+              window.CrystalDesktop.platform?.isLinux()
+            ) {
+              await window.CrystalDesktop.virtmic.stop();
+            }
+          } catch (err) {
+            console.warn("Failed to stop Vesktop virtmic on track end:", err);
+          }
+
+          videoStream.getTracks().forEach((t) => t.stop());
+          audioStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+        };
+
+        // Linux system audio via Vesktop virtmic
+        if (
+          isLinux &&
+          choice.audio &&
+          choice.includeSources &&
+          choice.includeSources !== "None" &&
+          window.CrystalDesktop?.virtmic
+        ) {
+          try {
+            let includeNodes = choice.includeSources as
+              | Vesktop.AudioNode[]
+              | "Entire System";
+
+            if (includeNodes === "Entire System") {
+              // Use Vesktop's "entire system" helper
+              await window.CrystalDesktop.virtmic.startSystem(
+                !choice.excludeSources ||
+                choice.excludeSources === "None" ||
+                choice.excludeSources === "Entire System"
+                  ? []
+                  : (choice.excludeSources as Vesktop.AudioNode[])
+              );
+            } else if (Array.isArray(includeNodes) && includeNodes.length > 0) {
+              await window.CrystalDesktop.virtmic.start(includeNodes);
+            }
+
+            // Wait for the virtual mic device to appear and capture from it
+            let virtmicDevice: MediaDeviceInfo | null = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+              await new Promise((resolve) => setTimeout(resolve, 200));
+
+              try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+              } catch {
+                // ignore
               }
-            } as any
-          });
 
-          const audioTrack = audioStream.getAudioTracks()[0];
-          if (audioTrack) {
-            await localParticipant.publishTrack(audioTrack, {
-              source: Track.Source.ScreenShareAudio
-            });
+              const devices =
+                await navigator.mediaDevices.enumerateDevices();
+              virtmicDevice = devices.find(
+                ({ kind, label }) =>
+                  kind === "audioinput" &&
+                  (label === "vencord-screen-share" ||
+                    label === "crystal-screen-share" ||
+                    label.toLowerCase().includes("virtmic") ||
+                    label.toLowerCase().includes("vesktop"))
+              ) as MediaDeviceInfo | null;
+
+              if (virtmicDevice) break;
+            }
+
+            if (virtmicDevice) {
+              const audioStream =
+                await navigator.mediaDevices.getUserMedia({
+                  audio: {
+                    deviceId: { exact: virtmicDevice.deviceId },
+                    autoGainControl: false,
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    channelCount: 2,
+                    sampleRate: 48000,
+                    sampleSize: 16,
+                  } as any,
+                });
+
+              audioStreams.push(audioStream);
+              const audioTrack = audioStream.getAudioTracks()[0];
+              if (audioTrack) {
+                audioTrack.addEventListener("ended", handleTrackEnd);
+                await localParticipant.publishTrack(audioTrack, {
+                  source: Track.Source.ScreenShareAudio,
+                });
+              }
+            } else {
+              console.warn(
+                "Vesktop virtual microphone not found for DM screenshare; audio will not be shared."
+              );
+            }
+          } catch (err) {
+            console.warn(
+              "Failed to capture Linux system audio via Vesktop virtmic in DM room:",
+              err
+            );
           }
-        } catch (err) {
-          console.warn('Could not capture system audio:', err);
-          // On macOS, show dialog about setting up audio loopback
-          if (process.platform === 'darwin') {
-            window.alert('To share system audio, you need to install and configure an audio loopback device like BlackHole.');
+        } else if (choice.audio && (isWindows || isMacOS)) {
+          // On Windows/macOS, Chromium/Electron already provide system audio with getDisplayMedia/getUserMedia
+          try {
+            const audioDisplayStream =
+              await navigator.mediaDevices.getDisplayMedia({
+                video: false,
+                audio: true,
+              } as any);
+
+            const audioTracks = audioDisplayStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+              const audioStream = new MediaStream(audioTracks);
+              audioStreams.push(audioStream);
+              const audioTrack = audioStream.getAudioTracks()[0];
+              if (audioTrack) {
+                audioTrack.addEventListener("ended", handleTrackEnd);
+                await localParticipant.publishTrack(audioTrack, {
+                  source: Track.Source.ScreenShareAudio,
+                });
+              }
+            } else {
+              audioDisplayStream.getTracks().forEach((t) => t.stop());
+              console.warn(
+                "No system audio tracks returned for DM screenshare on this platform."
+              );
+            }
+          } catch (err) {
+            console.warn(
+              "Failed to capture system audio via native loopback for DM screenshare:",
+              err
+            );
           }
         }
+
+        try {
+          new Audio("/sounds/sc-start.mp3").play().catch(() => {});
+        } catch (e) {}
       } catch (err) {
-        // If desktop picker fails, fall back to browser getDisplayMedia
-        console.warn('Desktop picker failed, falling back to browser getDisplayMedia', err);
+        console.warn(
+          "Vesktop screen share picker failed in DM room, falling back to browser getDisplayMedia:",
+          err
+        );
         await localParticipant.setScreenShareEnabled(true, {
-          audio: true
+          audio: true,
         });
       }
     } else {
-      // Not in Electron - use browser's getDisplayMedia with system audio
+      // Not in Vesktop - use browser's getDisplayMedia with system audio
       await localParticipant.setScreenShareEnabled(true, {
-        audio: true
+        audio: true,
       });
     }
   };
