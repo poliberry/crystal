@@ -1,6 +1,17 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getCurrentProfile, getOrCreateProfile, requireProfile } from "./lib/helpers";
+import {
+  getCurrentProfile,
+  getOrCreateProfile,
+  requireProfile,
+} from "./lib/helpers";
+
+// Get all profiles - should only be used for internal management
+export const getAll = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("profiles").collect();
+  },
+});
 
 // Get current user's profile by userId
 export const getCurrent = query({
@@ -31,7 +42,7 @@ export const getByUserId = query({
 
 // Get profile by ID with server context (for user dialog)
 export const getByIdWithServer = query({
-  args: { 
+  args: {
     profileId: v.id("profiles"),
     serverId: v.optional(v.id("servers")),
     userId: v.optional(v.string()),
@@ -47,7 +58,7 @@ export const getByIdWithServer = query({
       const member = await ctx.db
         .query("members")
         .withIndex("by_profileId_serverId", (q) =>
-          q.eq("profileId", args.profileId).eq("serverId", args.serverId!)
+          q.eq("profileId", args.profileId).eq("serverId", args.serverId!),
         )
         .first();
 
@@ -61,7 +72,9 @@ export const getByIdWithServer = query({
       if (currentProfile) {
         const currentServers = await ctx.db
           .query("members")
-          .withIndex("by_profileId", (q) => q.eq("profileId", currentProfile._id))
+          .withIndex("by_profileId", (q) =>
+            q.eq("profileId", currentProfile._id),
+          )
           .collect();
 
         const targetServers = await ctx.db
@@ -71,7 +84,7 @@ export const getByIdWithServer = query({
 
         const currentServerIds = new Set(currentServers.map((m) => m.serverId));
         const mutualCount = targetServers.filter((m) =>
-          currentServerIds.has(m.serverId)
+          currentServerIds.has(m.serverId),
         ).length;
 
         result.mutualServers = mutualCount;
@@ -115,7 +128,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     if (profile._id !== args.profileId) {
       throw new Error("Unauthorized");
     }
@@ -142,13 +155,13 @@ export const updateStatus = mutation({
       v.literal("IDLE"),
       v.literal("DND"),
       v.literal("INVISIBLE"),
-      v.literal("OFFLINE")
+      v.literal("OFFLINE"),
     ),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const updates: any = {
       updatedAt: Date.now(),
       status: args.status,
@@ -161,9 +174,13 @@ export const updateStatus = mutation({
         updates.prevStatus = profile.status;
       }
       // If already OFFLINE, don't change prevStatus
-    } 
+    }
     // When restoring from OFFLINE, keep prevStatus unchanged (don't update it)
-    else if (profile.status === "OFFLINE" && profile.prevStatus && profile.prevStatus !== "OFFLINE") {
+    else if (
+      profile.status === "OFFLINE" &&
+      profile.prevStatus &&
+      profile.prevStatus !== "OFFLINE"
+    ) {
       // Restoring from OFFLINE - keep prevStatus as is, just update status
       // Don't update prevStatus field at all
     }
@@ -187,13 +204,17 @@ export const updatePresenceStatus = mutation({
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const updates: any = {
       updatedAt: Date.now(),
     };
 
     // If presenceStatus is null, undefined, or empty string, clear it
-    if (args.presenceStatus === null || args.presenceStatus === undefined || args.presenceStatus.trim() === "") {
+    if (
+      args.presenceStatus === null ||
+      args.presenceStatus === undefined ||
+      args.presenceStatus.trim() === ""
+    ) {
       updates.presenceStatus = undefined;
     } else {
       // Trim and limit to 100 characters (emojis are multi-byte, but that's fine)
@@ -207,31 +228,33 @@ export const updatePresenceStatus = mutation({
 
 // Search users by username or email
 export const search = query({
-  args: { 
+  args: {
     query: v.string(),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (!args.query || args.query.length < 2) return [];
-    
+
     const searchLower = args.query.toLowerCase();
-    
+
     // Get all profiles and filter (in production, use a proper search index)
     const allProfiles = await ctx.db.query("profiles").collect();
-    
+
     const results = allProfiles
       .filter((profile) => {
         // Exclude current user
         if (args.userId && profile.userId === args.userId) return false;
-        
+
         const nameMatch = profile.name.toLowerCase().includes(searchLower);
-        const globalNameMatch = profile.globalName?.toLowerCase().includes(searchLower);
+        const globalNameMatch = profile.globalName
+          ?.toLowerCase()
+          .includes(searchLower);
         const emailMatch = profile.email.toLowerCase().includes(searchLower);
-        
+
         return nameMatch || globalNameMatch || emailMatch;
       })
       .slice(0, 20); // Limit results
-    
+
     return results;
   },
 });
