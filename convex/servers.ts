@@ -2,6 +2,13 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireProfile } from "./lib/helpers";
 
+// Get all servers - used for Crystal Console in SF
+export const getAll = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("servers").collect();
+  },
+});
+
 // Get server by ID
 export const getById = query({
   args: { serverId: v.id("servers") },
@@ -22,7 +29,7 @@ export const getById = query({
           ...member,
           profile: profile || null,
         };
-      })
+      }),
     );
 
     const channels = await ctx.db
@@ -49,16 +56,14 @@ export const getMyServers = query({
   args: { userId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const members = await ctx.db
       .query("members")
       .withIndex("by_profileId", (q) => q.eq("profileId", profile._id))
       .collect();
 
     const serverIds = members.map((m) => m.serverId);
-    const servers = await Promise.all(
-      serverIds.map((id) => ctx.db.get(id))
-    );
+    const servers = await Promise.all(serverIds.map((id) => ctx.db.get(id)));
 
     return servers.filter(Boolean);
   },
@@ -73,7 +78,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const now = Date.now();
     const inviteCode = crypto.randomUUID();
 
@@ -128,7 +133,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const server = await ctx.db.get(args.serverId);
     if (!server) {
       throw new Error("Server not found");
@@ -151,13 +156,13 @@ export const update = mutation({
 
 // Regenerate invite code
 export const regenerateInviteCode = mutation({
-  args: { 
+  args: {
     serverId: v.id("servers"),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const server = await ctx.db.get(args.serverId);
     if (!server) {
       throw new Error("Server not found");
@@ -180,13 +185,13 @@ export const regenerateInviteCode = mutation({
 
 // Leave server (remove member)
 export const leave = mutation({
-  args: { 
+  args: {
     serverId: v.id("servers"),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const server = await ctx.db.get(args.serverId);
     if (!server) {
       throw new Error("Server not found");
@@ -201,7 +206,7 @@ export const leave = mutation({
     const member = await ctx.db
       .query("members")
       .withIndex("by_profileId_serverId", (q) =>
-        q.eq("profileId", profile._id).eq("serverId", args.serverId)
+        q.eq("profileId", profile._id).eq("serverId", args.serverId),
       )
       .first();
 
@@ -216,13 +221,13 @@ export const leave = mutation({
 
 // Delete server
 export const remove = mutation({
-  args: { 
+  args: {
     serverId: v.id("servers"),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     const server = await ctx.db.get(args.serverId);
     if (!server) {
       throw new Error("Server not found");
@@ -238,7 +243,7 @@ export const remove = mutation({
       .query("members")
       .withIndex("by_serverId", (q) => q.eq("serverId", args.serverId))
       .collect();
-    
+
     for (const member of members) {
       await ctx.db.delete(member._id);
     }
@@ -247,7 +252,7 @@ export const remove = mutation({
       .query("channels")
       .withIndex("by_serverId", (q) => q.eq("serverId", args.serverId))
       .collect();
-    
+
     for (const channel of channels) {
       await ctx.db.delete(channel._id);
     }
@@ -256,7 +261,7 @@ export const remove = mutation({
       .query("categories")
       .withIndex("by_serverId", (q) => q.eq("serverId", args.serverId))
       .collect();
-    
+
     for (const category of categories) {
       await ctx.db.delete(category._id);
     }
@@ -274,13 +279,13 @@ export const joinByInviteCode = mutation({
   },
   handler: async (ctx, args) => {
     const profile = await requireProfile(ctx, args.userId);
-    
+
     // Find server by invite code
     const server = await ctx.db
       .query("servers")
       .withIndex("by_inviteCode", (q) => q.eq("inviteCode", args.inviteCode))
       .first();
-    
+
     if (!server) {
       throw new Error("Invalid invite code");
     }
@@ -289,7 +294,7 @@ export const joinByInviteCode = mutation({
     const existingMember = await ctx.db
       .query("members")
       .withIndex("by_profileId_serverId", (q) =>
-        q.eq("profileId", profile._id).eq("serverId", server._id)
+        q.eq("profileId", profile._id).eq("serverId", server._id),
       )
       .first();
 
@@ -310,4 +315,3 @@ export const joinByInviteCode = mutation({
     return server;
   },
 });
-
