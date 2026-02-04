@@ -13,6 +13,7 @@
 
 # Our sponsors
 [![Termius](https://i.imgur.com/iUKJf9S.png)](https://termius.com)
+[Termius](https://termius.com) provides a secure, reliable, and collaborative SSH client.
 
 # ❓ What is Crystal?
 
