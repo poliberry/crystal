@@ -11,6 +11,9 @@
 [![GitHub pull requests](https://flat.badgen.net/github/prs/endrtech/crystal?icon=github&color=black&scale=1.01)](https://github.com/endrtech/crystal/pulls "GitHub pull requests")
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/endrtech/crystal?utm_source=oss&utm_medium=github&utm_campaign=endrtech%2Fcrystal&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
+# Our sponsors
+[![Termius](https://i.imgur.com/iUKJf9S.png)](https://termius.com)
+
 # ❓ What is Crystal?
 
 > Crystal is currently in the development phase, and is not a public product. This repository has been made open source prior to launch, as a way for other developers to come up with new ideas for their own projects, or contribute and help with the development of Crystal.
