@@ -62,6 +62,7 @@ struct AudioCaptureState {
     module_id: Option<u32>,
 }
 
+#[derive(Default)]
 struct AppState {
     audio_capture: Mutex<AudioCaptureState>,
 }
@@ -267,9 +268,7 @@ fn stop_capture_internal(capture: &mut AudioCaptureState) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .manage(AppState {
-            audio_capture: Mutex::new(AudioCaptureState::default()),
-        })
+        .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             check_pipewire_available,
             get_audio_output_nodes,
