@@ -54,6 +54,7 @@ impl From<UtilsNode> for AudioOutputNode {
 }
 
 /// Tracks the state of an active PipeWire audio capture session.
+#[derive(Default)]
 struct AudioCaptureState {
     /// Optional spawned pw-loopback process handle.
     process: Option<std::process::Child>,
@@ -237,11 +238,8 @@ fn get_pipewire_audio_nodes() -> Vec<AudioOutputNode> {
     // Fallback: pw-dump JSON output.
     if let Ok(out) = std::process::Command::new("pw-dump").output() {
         if out.status.success() {
-            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
-                return parse_pw_dump_nodes(&json)
-                    .into_iter()
-                    .map(Into::into)
-                    .collect();
+            if let Ok(nodes) = parse_pw_dump_nodes(&out.stdout) {
+                return nodes.into_iter().map(Into::into).collect();
             }
         }
     }
@@ -267,16 +265,11 @@ fn stop_capture_internal(capture: &mut AudioCaptureState) {
 // ---------------------------------------------------------------------------
 
 fn main() {
-    let state = AppState {
-        audio_capture: Mutex::new(AudioCaptureState {
-            process: None,
-            module_id: None,
-        }),
-    };
-
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .manage(state)
+        .manage(AppState {
+            audio_capture: Mutex::new(AudioCaptureState::default()),
+        })
         .invoke_handler(tauri::generate_handler![
             check_pipewire_available,
             get_audio_output_nodes,

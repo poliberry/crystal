@@ -1,5 +1,7 @@
+use serde::Deserialize;
+
 /// Audio output node returned by PipeWire/PulseAudio queries.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AudioOutputNode {
     pub id: String,
     pub name: String,
@@ -47,15 +49,10 @@ pub fn parse_pactl_sinks(text: &str) -> Vec<AudioOutputNode> {
                  desc: &mut String,
                  nodes: &mut Vec<AudioOutputNode>| {
         if !name.is_empty() {
-            let d = if desc.is_empty() {
-                name.clone()
-            } else {
-                desc.clone()
-            };
             nodes.push(AudioOutputNode {
                 id: id.clone(),
                 name: name.clone(),
-                description: d,
+                description: if desc.is_empty() { name.clone() } else { desc.clone() },
             });
         }
         id.clear();
@@ -83,42 +80,69 @@ pub fn parse_pactl_sinks(text: &str) -> Vec<AudioOutputNode> {
 // pw-dump JSON parser
 // ---------------------------------------------------------------------------
 
-/// Parse the JSON output of `pw-dump` into a list of [`AudioOutputNode`].
+/// Typed representation of a single entry in `pw-dump` JSON output.
+#[derive(Deserialize)]
+struct PwDumpNode {
+    id: Option<u64>,
+    info: Option<PwDumpNodeInfo>,
+}
+
+#[derive(Deserialize)]
+struct PwDumpNodeInfo {
+    props: Option<PwDumpNodeProps>,
+}
+
+/// Properties we care about inside a `pw-dump` node's `info.props` object.
+/// All fields are optional so that missing or renamed keys produce a graceful
+/// skip rather than a silent parse failure.
+#[derive(Deserialize)]
+struct PwDumpNodeProps {
+    #[serde(rename = "media.class")]
+    media_class: Option<String>,
+    #[serde(rename = "node.name")]
+    node_name: Option<String>,
+    #[serde(rename = "node.description")]
+    node_description: Option<String>,
+    #[serde(rename = "node.nick")]
+    node_nick: Option<String>,
+}
+
+/// Parse the raw JSON bytes produced by `pw-dump` into a list of
+/// [`AudioOutputNode`] values.
 ///
 /// Only nodes with `media.class` equal to `"Audio/Sink"` or `"Audio/Duplex"`
-/// are included.
-pub fn parse_pw_dump_nodes(json: &serde_json::Value) -> Vec<AudioOutputNode> {
+/// are included. Returns a `serde_json::Error` if the top-level structure
+/// cannot be deserialized (e.g. `pw-dump` changes its output format).
+pub fn parse_pw_dump_nodes(raw: &[u8]) -> serde_json::Result<Vec<AudioOutputNode>> {
+    let entries: Vec<PwDumpNode> = serde_json::from_slice(raw)?;
     let mut nodes = Vec::new();
 
-    if let Some(arr) = json.as_array() {
-        for item in arr {
-            let media_class = item["info"]["props"]["media.class"]
-                .as_str()
-                .unwrap_or("");
+    for entry in entries {
+        let id = match entry.id {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
 
-            if !matches!(media_class, "Audio/Sink" | "Audio/Duplex") {
-                continue;
-            }
+        let props = match entry.info.and_then(|i| i.props) {
+            Some(p) => p,
+            None => continue,
+        };
 
-            let id = match item["id"].as_u64() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-            let name = item["info"]["props"]["node.name"]
-                .as_str()
-                .unwrap_or(&id)
-                .to_string();
-            let description = item["info"]["props"]["node.description"]
-                .as_str()
-                .or_else(|| item["info"]["props"]["node.nick"].as_str())
-                .unwrap_or(&name)
-                .to_string();
-
-            nodes.push(AudioOutputNode { id, name, description });
+        match props.media_class.as_deref() {
+            Some("Audio/Sink") | Some("Audio/Duplex") => {}
+            _ => continue,
         }
+
+        let name = props.node_name.unwrap_or_else(|| id.clone());
+        let description = props
+            .node_description
+            .or(props.node_nick)
+            .unwrap_or_else(|| name.clone());
+
+        nodes.push(AudioOutputNode { id, name, description });
     }
 
-    nodes
+    Ok(nodes)
 }
 
 // ---------------------------------------------------------------------------
@@ -240,9 +264,14 @@ mod tests {
     // parse_pw_dump_nodes
     // ------------------------------------------------------------------
 
+    // Helper: serialize a serde_json::Value to bytes and call parse_pw_dump_nodes.
+    fn parse_pw(json: serde_json::Value) -> Vec<AudioOutputNode> {
+        parse_pw_dump_nodes(serde_json::to_vec(&json).unwrap().as_slice()).unwrap()
+    }
+
     #[test]
     fn pw_dump_parses_audio_sink_node() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             {
                 "id": 42,
                 "info": {
@@ -253,8 +282,7 @@ mod tests {
                     }
                 }
             }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].id, "42");
         assert_eq!(nodes[0].name, "alsa_output.pci");
@@ -263,7 +291,7 @@ mod tests {
 
     #[test]
     fn pw_dump_parses_duplex_node() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             {
                 "id": 7,
                 "info": {
@@ -274,15 +302,14 @@ mod tests {
                     }
                 }
             }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].id, "7");
     }
 
     #[test]
     fn pw_dump_skips_non_sink_nodes() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             {
                 "id": 1,
                 "info": {
@@ -293,14 +320,13 @@ mod tests {
                     }
                 }
             }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert!(nodes.is_empty());
     }
 
     #[test]
     fn pw_dump_falls_back_to_nick_when_no_description() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             {
                 "id": 99,
                 "info": {
@@ -311,14 +337,13 @@ mod tests {
                     }
                 }
             }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert_eq!(nodes[0].description, "Nick Name");
     }
 
     #[test]
     fn pw_dump_falls_back_to_name_when_no_description_or_nick() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             {
                 "id": 3,
                 "info": {
@@ -328,14 +353,13 @@ mod tests {
                     }
                 }
             }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert_eq!(nodes[0].description, "bare-node");
     }
 
     #[test]
     fn pw_dump_skips_node_without_id() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             {
                 "info": {
                     "props": {
@@ -344,28 +368,31 @@ mod tests {
                     }
                 }
             }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert!(nodes.is_empty());
     }
 
     #[test]
     fn pw_dump_empty_array_returns_empty_vec() {
-        let json: serde_json::Value = serde_json::json!([]);
-        let nodes = parse_pw_dump_nodes(&json);
+        let nodes = parse_pw(serde_json::json!([]));
         assert!(nodes.is_empty());
     }
 
     #[test]
     fn pw_dump_handles_multiple_sinks_and_skips_sources() {
-        let json: serde_json::Value = serde_json::json!([
+        let nodes = parse_pw(serde_json::json!([
             { "id": 10, "info": { "props": { "media.class": "Audio/Sink", "node.name": "sink-a", "node.description": "Sink A" } } },
             { "id": 11, "info": { "props": { "media.class": "Audio/Source", "node.name": "src-b", "node.description": "Source B" } } },
             { "id": 12, "info": { "props": { "media.class": "Audio/Sink", "node.name": "sink-c", "node.description": "Sink C" } } }
-        ]);
-        let nodes = parse_pw_dump_nodes(&json);
+        ]));
         assert_eq!(nodes.len(), 2);
         assert_eq!(nodes[0].id, "10");
         assert_eq!(nodes[1].id, "12");
+    }
+
+    #[test]
+    fn pw_dump_returns_error_for_invalid_json() {
+        let result = parse_pw_dump_nodes(b"not valid json");
+        assert!(result.is_err());
     }
 }

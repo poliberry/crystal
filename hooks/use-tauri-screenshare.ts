@@ -67,7 +67,9 @@ export function useTauriScreenshare(): UseTauriScreenshareReturn {
   useEffect(() => {
     return () => {
       if (captureActiveRef.current) {
-        stopPipewireAudioCapture().catch(() => {});
+        stopPipewireAudioCapture().catch((err) => {
+          console.error("[useTauriScreenshare] Failed to stop PipeWire capture on unmount:", err);
+        });
         captureActiveRef.current = false;
       }
     };
