@@ -94,6 +94,7 @@ declare global {
           includeSources?: "None" | "Entire System" | Vesktop.AudioNode[];
           excludeSources?: "None" | "Entire System" | Vesktop.AudioNode[];
         } | null>;
+      };
     };
   }
 }
