@@ -194,6 +194,7 @@ import {
   VideoConference,
 } from "@livekit/components-react";
 import { useVirtualAudio } from "@/hooks/use-virtual-audio";
+import { useTauriScreenshare } from "@/hooks/use-tauri-screenshare";
 import {
   Camera,
   CameraOff,
@@ -387,16 +388,21 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const livekit = useLiveKit();
   const room = useRoomContext();
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
-  const [pipewireAvailable, setPipewireAvailable] = useState(false);
-  const [pipewireAudioOutputs, setPipewireAudioOutputs] = useState<
-    Crystal.AudioNode[]
-  >([]);
   const [showPipewireScreenshareDialog, setShowPipewireScreenshareDialog] =
     useState(false);
   const [activeParticipant, setActiveParticipant] = useState<any>(null);
   const [activeScreenShare, setActiveScreenShare] = useState<any>(null);
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
+
+  // Tauri/PipeWire screenshare hook (no-ops when not running in Tauri).
+  const {
+    pipewireAvailable,
+    audioOutputNodes: pipewireAudioOutputs,
+    startAudioCapture: startTauriAudioCapture,
+    stopAudioCapture: stopTauriAudioCapture,
+    isTauri: isTauriEnv,
+  } = useTauriScreenshare();
 
   // Resolve CrystalNative at runtime (Electron preload bridge or Vesktop shim)
   const crystalNative = useMemo(() => {
@@ -440,36 +446,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const screenshareStopRef = useRef<HTMLAudioElement | null>(null);
 
   // Initialize PipeWire availability and output nodes via Tauri commands
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!(window as any).__TAURI__) return;
-
-    (async () => {
-      try {
-        const isAvailable = await (window as any).__TAURI__.invoke<boolean>(
-          "check_pipewire_available",
-        );
-        setPipewireAvailable(isAvailable);
-
-        if (!isAvailable) return;
-
-        const outputs = await (window as any).__TAURI__.invoke<any[]>(
-          "get_audio_output_nodes",
-        );
-
-        // We typecast to Crystal.AudioNode[] assuming the backend returns
-        // objects compatible with that interface.
-        if (Array.isArray(outputs)) {
-          setPipewireAudioOutputs(outputs as Crystal.AudioNode[]);
-        }
-      } catch (err) {
-        console.error("Failed to initialize PipeWire via Tauri:", err);
-        setPipewireAvailable(false);
-      }
-    })();
-  }, []);
-
-
+  // (now handled by useTauriScreenshare hook above)
 
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -1134,6 +1111,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
           }
         }
 
+        // Stop Tauri/PipeWire audio capture if it was started for this session.
+        if (isTauriEnv) {
+          await stopTauriAudioCapture();
+        }
+
         try {
           screenshareStopRef.current?.play().catch(() => {});
         } catch (e) {}
@@ -1213,6 +1195,8 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     isElectronEnv,
     isLinuxElectron,
     crystalNative,
+    isTauriEnv,
+    stopTauriAudioCapture,
     handleStartScreenShare,
   ]);
 
@@ -1232,19 +1216,15 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
       if (!localParticipant) return;
       try {
         if (nodeId) {
-          // Invoke Tauri command to start capturing the selected PipeWire node
-          await (window as any).__TAURI__?.invoke("start_pipewire_audio_capture", { nodeId });
+          // Start capturing via the Tauri bridge (typed wrapper over invoke).
+          await startTauriAudioCapture(nodeId);
         }
         try {
           await localParticipant.setScreenShareEnabled(true, { audio: !!nodeId });
         } catch (shareErr) {
-          // If screen share failed, stop any PipeWire capture we started
+          // If screen share setup failed, stop any PipeWire capture we started.
           if (nodeId) {
-            try {
-              await (window as any).__TAURI__?.invoke("stop_pipewire_audio_capture");
-            } catch {
-              // best-effort cleanup
-            }
+            await stopTauriAudioCapture();
           }
           throw shareErr;
         }
@@ -1257,7 +1237,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
         console.error("Failed to start Tauri screen share:", err);
       }
     },
-    [localParticipant],
+    [localParticipant, startTauriAudioCapture, stopTauriAudioCapture],
   );
 
   const participants = useMemo(
