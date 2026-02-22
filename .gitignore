@@ -32,6 +32,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# tauri
+/src-tauri/target/
+/src-tauri/audio-utils/target/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

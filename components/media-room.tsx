@@ -125,6 +125,12 @@ declare namespace Crystal {
     audio: Audio;
     platform: Platform;
   }
+
+  interface AudioNode {
+    id: string;
+    name?: string;
+    description?: string;
+  }
 }
 
 interface CrystalDesktopBridge {
@@ -188,6 +194,7 @@ import {
   VideoConference,
 } from "@livekit/components-react";
 import { useVirtualAudio } from "@/hooks/use-virtual-audio";
+import { useTauriScreenshare } from "@/hooks/use-tauri-screenshare";
 import {
   Camera,
   CameraOff,
@@ -229,6 +236,13 @@ import {
 } from "./ui/popover";
 import { Separator } from "./ui/separator";
 import { Badge } from "./ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 // Vesktop Types
 type SpecialSource = "None" | "Entire System";
@@ -374,16 +388,21 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const livekit = useLiveKit();
   const room = useRoomContext();
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
-  const [pipewireAvailable, setPipewireAvailable] = useState(false);
-  const [pipewireAudioOutputs, setPipewireAudioOutputs] = useState<
-    Crystal.AudioNode[]
-  >([]);
   const [showPipewireScreenshareDialog, setShowPipewireScreenshareDialog] =
     useState(false);
   const [activeParticipant, setActiveParticipant] = useState<any>(null);
   const [activeScreenShare, setActiveScreenShare] = useState<any>(null);
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
+
+  // Tauri/PipeWire screenshare hook (no-ops when not running in Tauri).
+  const {
+    pipewireAvailable,
+    audioOutputNodes: pipewireAudioOutputs,
+    startAudioCapture: startTauriAudioCapture,
+    stopAudioCapture: stopTauriAudioCapture,
+    isTauri: isTauriEnv,
+  } = useTauriScreenshare();
 
   // Resolve CrystalNative at runtime (Electron preload bridge or Vesktop shim)
   const crystalNative = useMemo(() => {
@@ -427,94 +446,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
   const screenshareStopRef = useRef<HTMLAudioElement | null>(null);
 
   // Initialize PipeWire availability and output nodes via Tauri commands
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const anyWindow = window as any;
-    if (!anyWindow.__TAURI__) return;
-
-    (async () => {
-      try {
-        const isAvailable = await anyWindow.__TAURI__.invoke<boolean>(
-          "check_pipewire_available",
-        );
-        setPipewireAvailable(isAvailable);
-
-        if (!isAvailable) return;
-
-        const outputs = await anyWindow.__TAURI__.invoke<any[]>(
-          "get_audio_output_nodes",
-        );
-
-        if (Array.isArray(outputs)) {
-          setPipewireAudioOutputs(outputs);
-        }
-      } catch (err) {
-        console.error("Failed to initialize PipeWire via Tauri:", err);
-        setPipewireAvailable(false);
-      }
-    })();
-  }, []);
-
-  // Initialize PipeWire availability and output nodes via Tauri commands
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const anyWindow = window as any;
-    if (!anyWindow.__TAURI__) return;
-
-    (async () => {
-      try {
-        const isAvailable = await anyWindow.__TAURI__.invoke<boolean>(
-          "check_pipewire_available",
-        );
-        setPipewireAvailable(isAvailable);
-
-        if (!isAvailable) return;
-
-        const outputs = await anyWindow.__TAURI__.invoke<any[]>(
-          "get_audio_output_nodes",
-        );
-
-        if (Array.isArray(outputs)) {
-          setPipewireAudioOutputs(outputs as Crystal.AudioNode[]);
-        }
-      } catch (err) {
-        console.error("Failed to initialize PipeWire via Tauri:", err);
-        setPipewireAvailable(false);
-      }
-    })();
-  }, []);
-
-  // Initialize PipeWire availability and output nodes via Tauri commands
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!(window as any).__TAURI__) return;
-
-    (async () => {
-      try {
-        const isAvailable = await (window as any).__TAURI__.invoke<boolean>(
-          "check_pipewire_available",
-        );
-        setPipewireAvailable(isAvailable);
-
-        if (!isAvailable) return;
-
-        const outputs = await (window as any).__TAURI__.invoke<any[]>(
-          "get_audio_output_nodes",
-        );
-
-        // We typecast to Crystal.AudioNode[] assuming the backend returns
-        // objects compatible with that interface.
-        if (Array.isArray(outputs)) {
-          setPipewireAudioOutputs(outputs as Crystal.AudioNode[]);
-        }
-      } catch (err) {
-        console.error("Failed to initialize PipeWire via Tauri:", err);
-        setPipewireAvailable(false);
-      }
-    })();
-  }, []);
-
-
+  // (now handled by useTauriScreenshare hook above)
 
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -1179,6 +1111,11 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
           }
         }
 
+        // Stop Tauri/PipeWire audio capture if it was started for this session.
+        if (isTauriEnv) {
+          await stopTauriAudioCapture();
+        }
+
         try {
           screenshareStopRef.current?.play().catch(() => {});
         } catch (e) {}
@@ -1258,6 +1195,8 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     isElectronEnv,
     isLinuxElectron,
     crystalNative,
+    isTauriEnv,
+    stopTauriAudioCapture,
     handleStartScreenShare,
   ]);
 
@@ -1266,6 +1205,40 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
     call_disconnect.play();
     livekit.leave();
   };
+
+  /**
+   * Handle the user's Tauri/PipeWire audio device choice for screensharing.
+   * Called when the user picks a device (or null to skip) from the dialog.
+   */
+  const handlePipewireScreenshareChoice = useCallback(
+    async (nodeId: string | null) => {
+      setShowPipewireScreenshareDialog(false);
+      if (!localParticipant) return;
+      try {
+        if (nodeId) {
+          // Start capturing via the Tauri bridge (typed wrapper over invoke).
+          await startTauriAudioCapture(nodeId);
+        }
+        try {
+          await localParticipant.setScreenShareEnabled(true, { audio: !!nodeId });
+        } catch (shareErr) {
+          // If screen share setup failed, stop any PipeWire capture we started.
+          if (nodeId) {
+            await stopTauriAudioCapture();
+          }
+          throw shareErr;
+        }
+        try {
+          screenshareStartRef.current?.play().catch(() => {});
+        } catch {
+          // ignore sound failures
+        }
+      } catch (err) {
+        console.error("Failed to start Tauri screen share:", err);
+      }
+    },
+    [localParticipant, startTauriAudioCapture, stopTauriAudioCapture],
+  );
 
   const participants = useMemo(
     () => [localParticipant, ...remoteParticipants],
@@ -2356,7 +2329,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
               // Horizontal scroll when active view exists
               <div className="h-fit overflow-x-auto overflow-y-hidden mb-8">
                 {/* PipeWire audio selection dialog (Linux / Tauri) */}
-                {pipewireDialogOpen && (
+                {showPipewireScreenshareDialog && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
                     <div className="w-full max-w-md rounded-lg bg-background p-4 shadow-lg">
                       <h2 className="text-lg font-semibold mb-2">
@@ -2387,7 +2360,7 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                         <button
                           className="rounded border px-3 py-1 text-sm"
                           onClick={() => {
-                            setPipewireDialogOpen(false);
+                            setShowPipewireScreenshareDialog(false);
                           }}
                         >
                           Cancel
@@ -2589,59 +2562,60 @@ export const MediaRoom = ({ channel, server }: MediaRoomProps) => {
                       </div>
                     </div>
                   ) : (
-                    {showPipewireScreenshareDialog && (
-                      <Dialog open={showPipewireScreenshareDialog} onOpenChange={setShowPipewireScreenshareDialog}>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Select audio source for screenshare</DialogTitle>
-                            <DialogDescription>
-                              Choose which system audio output should be captured with your screen share.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-2">
-                            {pipewireAudioOutputs.length === 0 && (
-                              <div className="text-sm text-muted-foreground">
-                                No PipeWire audio outputs were detected.
-                              </div>
-                            </>
-                            )}
-                            {pipewireAudioOutputs.map((node) => (
-                              <button
-                                key={node.id}
-                                className="flex w-full items-center justify-between rounded border px-3 py-2 text-left hover:bg-accent"
-                                onClick={() => confirmPipewireScreenshareWithDevice(node.id)}
+                    <>
+                      {showPipewireScreenshareDialog && (
+                        <Dialog open={showPipewireScreenshareDialog} onOpenChange={setShowPipewireScreenshareDialog}>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Select audio source for screenshare</DialogTitle>
+                              <DialogDescription>
+                                Choose which system audio output should be captured with your screen share.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-2">
+                              {pipewireAudioOutputs.length === 0 && (
+                                <div className="text-sm text-muted-foreground">
+                                  No PipeWire audio outputs were detected.
+                                </div>
+                              )}
+                              {pipewireAudioOutputs.map((node) => (
+                                <button
+                                  key={node.id}
+                                  className="flex w-full items-center justify-between rounded border px-3 py-2 text-left hover:bg-accent"
+                                  onClick={() => handlePipewireScreenshareChoice(node.id)}
+                                >
+                                  <span className="text-sm font-medium">{node.description || node.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                            <div className="mt-4 flex justify-end space-x-2">
+                              <Button
+                                variant="outline"
+                                onClick={() => handlePipewireScreenshareChoice(null)}
                               >
-                                <span className="text-sm font-medium">{node.description || node.name}</span>
-                              </button>
-                            ))}
+                                Continue without selecting
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      )}
+                      <div
+                        className="grid flex-1 h-[calc(100vh-220px)]"
+                        style={{
+                          gridTemplateColumns: `repeat(${gridLayout.cols}, minmax(0, 1fr))`,
+                          gridTemplateRows: `repeat(${gridLayout.rows}, minmax(0, 1fr))`,
+                        }}
+                      >
+                        {currentPageCards.map((card, i) => (
+                          <div
+                            key={i}
+                            className="w-full sm:h-[67.6vmin] md:h-[76.5vmin] lg:h-[82.6vmin]"
+                          >
+                            {renderCard(card)}
                           </div>
-                          <div className="mt-4 flex justify-end space-x-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => confirmPipewireScreenshareWithDevice(null)}
-                            >
-                              Continue without selecting
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    )}
-                    <div
-                      className="grid flex-1 h-[calc(100vh-220px)]"
-                      style={{
-                        gridTemplateColumns: `repeat(${gridLayout.cols}, minmax(0, 1fr))`,
-                        gridTemplateRows: `repeat(${gridLayout.rows}, minmax(0, 1fr))`,
-                      }}
-                    >
-                      {currentPageCards.map((card, i) => (
-                        <div
-                          key={i}
-                          className="w-full sm:h-[67.6vmin] md:h-[76.5vmin] lg:h-[82.6vmin]"
-                        >
-                          {renderCard(card)}
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
 
