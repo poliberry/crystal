@@ -4,12 +4,22 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
 
+// Pure parsing/validation helpers (no Tauri/GTK deps — tested separately).
+use crystal_audio_utils::{is_valid_node_id, AudioOutputNode as UtilsNode};
+
+// Re-export as the local type with Tauri serialization derives.
 /// Represents a PipeWire audio output node (sink).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AudioOutputNode {
     pub id: String,
     pub name: String,
     pub description: String,
+}
+
+impl From<UtilsNode> for AudioOutputNode {
+    fn from(n: UtilsNode) -> Self {
+        AudioOutputNode { id: n.id, name: n.name, description: n.description }
+    }
 }
 
 /// Tracks the state of an active PipeWire audio capture session.
@@ -95,13 +105,8 @@ fn start_pipewire_audio_capture(
 ) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        // Validate the node_id to only allow safe characters (digits, letters,
-        // hyphens, underscores, dots) so it cannot be used for command injection
-        // when interpolated into pw-loopback / pactl arguments.
-        if !node_id
-            .chars()
-            .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        {
+        // Validate the node_id using the shared utility (safe chars only).
+        if !is_valid_node_id(&node_id) {
             return Err(format!("Invalid node_id: {node_id}"));
         }
         let mut capture = state.audio_capture.lock().map_err(|e| e.to_string())?;
@@ -180,11 +185,13 @@ fn stop_pipewire_audio_capture(state: State<'_, AppState>) -> Result<(), String>
 }
 
 // ---------------------------------------------------------------------------
-// Platform-specific helpers (Linux)
+// Platform-specific helpers (Linux) — delegate to crystal-audio-utils
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
 fn get_pipewire_audio_nodes() -> Vec<AudioOutputNode> {
+    use crystal_audio_utils::{parse_pactl_sinks, parse_pw_dump_nodes};
+
     // Try pactl first — widely available and easy to parse.
     if let Ok(out) = std::process::Command::new("pactl")
         .args(["list", "sinks"])
@@ -194,7 +201,7 @@ fn get_pipewire_audio_nodes() -> Vec<AudioOutputNode> {
             let text = String::from_utf8_lossy(&out.stdout);
             let nodes = parse_pactl_sinks(&text);
             if !nodes.is_empty() {
-                return nodes;
+                return nodes.into_iter().map(Into::into).collect();
             }
         }
     }
@@ -203,86 +210,15 @@ fn get_pipewire_audio_nodes() -> Vec<AudioOutputNode> {
     if let Ok(out) = std::process::Command::new("pw-dump").output() {
         if out.status.success() {
             if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
-                return parse_pw_dump_nodes(&json);
+                return parse_pw_dump_nodes(&json)
+                    .into_iter()
+                    .map(Into::into)
+                    .collect();
             }
         }
     }
 
     vec![]
-}
-
-/// Parse `pactl list sinks` output into a list of [`AudioOutputNode`].
-#[cfg(target_os = "linux")]
-fn parse_pactl_sinks(text: &str) -> Vec<AudioOutputNode> {
-    let mut nodes: Vec<AudioOutputNode> = Vec::new();
-    let mut id = String::new();
-    let mut name = String::new();
-    let mut desc = String::new();
-
-    let flush = |id: &mut String, name: &mut String, desc: &mut String, nodes: &mut Vec<AudioOutputNode>| {
-        if !name.is_empty() {
-            let d = if desc.is_empty() { name.clone() } else { desc.clone() };
-            nodes.push(AudioOutputNode {
-                id: id.clone(),
-                name: name.clone(),
-                description: d,
-            });
-        }
-        id.clear();
-        name.clear();
-        desc.clear();
-    };
-
-    for line in text.lines() {
-        let t = line.trim();
-        if let Some(rest) = t.strip_prefix("Sink #") {
-            flush(&mut id, &mut name, &mut desc, &mut nodes);
-            id = rest.to_string();
-        } else if let Some(rest) = t.strip_prefix("Name: ") {
-            name = rest.to_string();
-        } else if let Some(rest) = t.strip_prefix("Description: ") {
-            desc = rest.to_string();
-        }
-    }
-    flush(&mut id, &mut name, &mut desc, &mut nodes);
-
-    nodes
-}
-
-/// Parse `pw-dump` JSON output into a list of [`AudioOutputNode`].
-#[cfg(target_os = "linux")]
-fn parse_pw_dump_nodes(json: &serde_json::Value) -> Vec<AudioOutputNode> {
-    let mut nodes = Vec::new();
-
-    if let Some(arr) = json.as_array() {
-        for item in arr {
-            let media_class = item["info"]["props"]["media.class"]
-                .as_str()
-                .unwrap_or("");
-
-            if !matches!(media_class, "Audio/Sink" | "Audio/Duplex") {
-                continue;
-            }
-
-            let id = match item["id"].as_u64() {
-                Some(n) => n.to_string(),
-                None => continue,
-            };
-            let name = item["info"]["props"]["node.name"]
-                .as_str()
-                .unwrap_or(&id)
-                .to_string();
-            let description = item["info"]["props"]["node.description"]
-                .as_str()
-                .or_else(|| item["info"]["props"]["node.nick"].as_str())
-                .unwrap_or(&name)
-                .to_string();
-
-            nodes.push(AudioOutputNode { id, name, description });
-        }
-    }
-
-    nodes
 }
 
 /// Tear down any active audio capture (process + pactl module).
@@ -322,3 +258,6 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+// Tests for the pure parsing/validation logic live in src-tauri/audio-utils/.
+// Run them with:  cargo test --manifest-path src-tauri/audio-utils/Cargo.toml

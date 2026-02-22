@@ -1,0 +1,7 @@
+[package]
+name = "crystal-audio-utils"
+version = "1.0.5"
+edition = "2021"
+
+[dependencies]
+serde_json = "1"

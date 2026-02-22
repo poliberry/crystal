@@ -9,6 +9,8 @@
     "lint": "next lint",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "test": "node --experimental-strip-types tests/tauri-bridge.test.ts",
+    "test:rust": "cargo test --manifest-path src-tauri/audio-utils/Cargo.toml",
     "scylla:init": "node lib/scylla-init.js",
     "scylla:migrate": "npx ts-node lib/scylla-migrate.ts",
     "scylla:test": "USE_SCYLLA=true npm run dev",

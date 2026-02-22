@@ -15,6 +15,7 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+crystal-audio-utils = { path = "audio-utils" }
 
 [profile.release]
 codegen-units = 1

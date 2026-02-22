@@ -34,6 +34,7 @@ yarn-error.log*
 
 # tauri
 /src-tauri/target/
+/src-tauri/audio-utils/target/
 
 # typescript
 *.tsbuildinfo
