@@ -7,7 +7,38 @@ use tauri::State;
 // Pure parsing/validation helpers (no Tauri/GTK deps — tested separately).
 use crystal_audio_utils::{is_valid_node_id, AudioOutputNode as UtilsNode};
 
-// Re-export as the local type with Tauri serialization derives.
+// ---------------------------------------------------------------------------
+// Error handling
+// ---------------------------------------------------------------------------
+
+/// Serializable error wrapper for Tauri command return types.
+///
+/// Tauri requires errors to implement [`serde::Serialize`]. This type wraps
+/// [`anyhow::Error`] and serialises it as a plain string so that callers
+/// receive a human-readable message over IPC, while internally we get the
+/// ergonomic `?` propagation and context-chaining that anyhow provides.
+#[derive(Debug)]
+struct CommandError(anyhow::Error);
+
+impl Serialize for CommandError {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<E: Into<anyhow::Error>> From<E> for CommandError {
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+
+/// Alias used by all Tauri commands in this module.
+type Result<T> = std::result::Result<T, CommandError>;
+
+// ---------------------------------------------------------------------------
+// Domain types
+// ---------------------------------------------------------------------------
+
 /// Represents a PipeWire audio output node (sink).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AudioOutputNode {
@@ -45,20 +76,11 @@ fn check_pipewire_available() -> bool {
     #[cfg(target_os = "linux")]
     {
         // Primary check: PipeWire socket under the current user's XDG_RUNTIME_DIR.
-        let socket_available = std::process::Command::new("id")
-            .arg("-u")
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|uid| {
-                let uid = uid.trim().to_string();
-                let path =
-                    std::env::var("XDG_RUNTIME_DIR").unwrap_or(format!("/run/user/{uid}"));
-                std::path::Path::new(&path).join("pipewire-0").exists()
-            })
-            .unwrap_or(false);
-
-        if socket_available {
+        // Use libc::getuid() to avoid spawning a child process just to read the UID.
+        let uid = unsafe { libc::getuid() };
+        let path = std::env::var("XDG_RUNTIME_DIR")
+            .unwrap_or_else(|_| format!("/run/user/{uid}"));
+        if std::path::Path::new(&path).join("pipewire-0").exists() {
             return true;
         }
 
@@ -102,14 +124,18 @@ fn get_audio_output_nodes() -> Vec<AudioOutputNode> {
 fn start_pipewire_audio_capture(
     node_id: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
         // Validate the node_id using the shared utility (safe chars only).
         if !is_valid_node_id(&node_id) {
-            return Err(format!("Invalid node_id: {node_id}"));
+            return Err(anyhow::anyhow!("Invalid node_id: {node_id}").into());
         }
-        let mut capture = state.audio_capture.lock().map_err(|e| e.to_string())?;
+
+        let mut capture = state
+            .audio_capture
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {e}"))?;
 
         // Stop any previously active capture first.
         stop_capture_internal(&mut capture);
@@ -123,7 +149,7 @@ fn start_pipewire_audio_capture(
                 "sink_properties=device.description=Crystal-Mix",
             ])
             .output()
-            .map_err(|e| format!("Failed to create Crystal Mix sink: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to create Crystal Mix sink: {e}"))?;
 
         if load_result.status.success() {
             let id_str = String::from_utf8_lossy(&load_result.stdout)
@@ -133,7 +159,7 @@ fn start_pipewire_audio_capture(
         }
 
         // 2. Use pw-loopback to route the selected PipeWire node into crystal-mix.
-        let loopback = std::process::Command::new("pw-loopback")
+        match std::process::Command::new("pw-loopback")
             .args([
                 format!(
                     "--capture-props=media.class=Audio/Sink,node.target={}",
@@ -141,9 +167,8 @@ fn start_pipewire_audio_capture(
                 ),
                 "--playback-props=media.class=Audio/Source,node.name=crystal-screenshare,node.description=Crystal-Screenshare".into(),
             ])
-            .spawn();
-
-        match loopback {
+            .spawn()
+        {
             Ok(child) => {
                 capture.process = Some(child);
                 Ok(())
@@ -158,12 +183,12 @@ fn start_pipewire_audio_capture(
                         "sink=crystal-mix",
                     ])
                     .output()
-                    .map_err(|e| format!("Loopback fallback failed: {e}"))?;
+                    .map_err(|e| anyhow::anyhow!("Loopback fallback failed: {e}"))?;
 
                 if fb.status.success() {
                     Ok(())
                 } else {
-                    Err("Failed to start PipeWire audio capture".to_string())
+                    Err(anyhow::anyhow!("Failed to start PipeWire audio capture").into())
                 }
             }
         }
@@ -172,14 +197,17 @@ fn start_pipewire_audio_capture(
     #[cfg(not(target_os = "linux"))]
     {
         let _node_id = node_id;
-        Err("PipeWire audio capture is only supported on Linux".to_string())
+        Err(anyhow::anyhow!("PipeWire audio capture is only supported on Linux").into())
     }
 }
 
 /// Stops any active PipeWire audio capture session and cleans up resources.
 #[tauri::command]
-fn stop_pipewire_audio_capture(state: State<'_, AppState>) -> Result<(), String> {
-    let mut capture = state.audio_capture.lock().map_err(|e| e.to_string())?;
+fn stop_pipewire_audio_capture(state: State<'_, AppState>) -> Result<()> {
+    let mut capture = state
+        .audio_capture
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Mutex poisoned: {e}"))?;
     stop_capture_internal(&mut capture);
     Ok(())
 }
